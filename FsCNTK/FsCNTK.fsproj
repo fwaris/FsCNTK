@@ -14,6 +14,8 @@
     <TargetFSharpCoreVersion>4.4.1.0</TargetFSharpCoreVersion>
     <AutoGenerateBindingRedirects>true</AutoGenerateBindingRedirects>
     <Name>FsCNTK</Name>
+    <NuGetPackageImportStamp>
+    </NuGetPackageImportStamp>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|AnyCPU' ">
     <DebugSymbols>true</DebugSymbols>
@@ -52,11 +54,26 @@
   <Import Project="$(FSharpTargetsPath)" />
   <ItemGroup>
     <Compile Include="AssemblyInfo.fs" />
-    <Compile Include="Library1.fs" />
     <None Include="Script.fsx" />
     <Content Include="packages.config" />
+    <Compile Include="ImageUtils.fs" />
+    <Compile Include="Probability.fs" />
+    <Compile Include="FsBase.fs" />
+    <Compile Include="Blocks.fs" />
+    <Compile Include="Layers\LayersBase.fs" />
+    <Compile Include="Layers\Dense.fs" />
+    <Compile Include="Layers\BatchNormalization.fs" />
+    <Compile Include="Layers\Convolution.fs" />
+    <Compile Include="Layers\Convolution2D.fs" />
+    <Compile Include="Layers\ConvolutionTranspose.fs" />
+    <Compile Include="Layers\ConvolutionTranspose2D.fs" />
+    <Compile Include="Pgm.fs" />
+    <Compile Include="TstGan.fs" />
   </ItemGroup>
   <ItemGroup>
+    <Reference Include="Cntk.Core.Managed-2.3.1">
+      <HintPath>..\packages\CNTK.GPU.2.3.1\lib\net45\x64\Cntk.Core.Managed-2.3.1.dll</HintPath>
+    </Reference>
     <Reference Include="mscorlib" />
     <Reference Include="FSharp.Core">
       <Name>FSharp.Core</Name>
@@ -71,6 +88,13 @@
       <Private>True</Private>
     </Reference>
   </ItemGroup>
+  <Import Project="..\packages\CNTK.GPU.2.3.1\build\net45\CNTK.GPU.targets" Condition="Exists('..\packages\CNTK.GPU.2.3.1\build\net45\CNTK.GPU.targets')" />
+  <Target Name="EnsureNuGetPackageBuildImports" BeforeTargets="PrepareForBuild">
+    <PropertyGroup>
+      <ErrorText>This project references NuGet package(s) that are missing on this computer. Use NuGet Package Restore to download them.  For more information, see http://go.microsoft.com/fwlink/?LinkID=322105. The missing file is {0}.</ErrorText>
+    </PropertyGroup>
+    <Error Condition="!Exists('..\packages\CNTK.GPU.2.3.1\build\net45\CNTK.GPU.targets')" Text="$([System.String]::Format('$(ErrorText)', '..\packages\CNTK.GPU.2.3.1\build\net45\CNTK.GPU.targets'))" />
+  </Target>
   <!-- To modify your build process, add your task inside one of the targets below and uncomment it. 
        Other similar extension points exist, see Microsoft.Common.targets.
   <Target Name="BeforeBuild">
