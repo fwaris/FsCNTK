@@ -5,7 +5,7 @@ open System.Runtime.InteropServices
 open System.Drawing.Imaging
 open System
 
-let scaler (sMin,sMax) (vMin,vMax) (v:float) =
+let private scaler (sMin,sMax) (vMin,vMax) (v:float) =
     if v < vMin then failwith "out of min range for scaling"
     if v > vMax then failwith "out of max range for scaling"
     (v - vMin) / (vMax - vMin) * (sMax - sMin) + sMin

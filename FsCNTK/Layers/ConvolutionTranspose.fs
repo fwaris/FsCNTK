@@ -5,12 +5,11 @@ open FsBase
 open Blocks
 open Layers
 
-module Layers =
+module Layers_ConvolutionTranspose =
   type L with
 
     static member ConvolutionTranspose 
         (
-            convVar : Variable,
             filter_shape, 
             ?num_filters,
             ?activation,
@@ -25,14 +24,14 @@ module Layers =
             ?dialation,
             ?max_temp_mem_size_in_samples,
             ?name
-        ) = 
-        
-        let num_filters = defaultArg num_filters 0 //probably not correct as python defaults to null
+        ) 
+        = 
+        let num_filters = defaultArg num_filters 0 //scalar
         let activation = defaultArg activation Activation.NONE
         let init = defaultArg init (C.GlorotUniformInitializer())
         let pad = defaultArg pad false
         let strides = defaultArg strides (D 1)
-        let sharing = defaultArg sharing true
+        let sharing = defaultArg sharing true //for future
         let bias = defaultArg bias true
         let init_bias = defaultArg init_bias 0.
         let reduction_rank = defaultArg reduction_rank 1
@@ -45,88 +44,63 @@ module Layers =
         if not sharing then 
             failwith "ConvolutionTranspose: sharing option currently must be true"
 
-        //tuplify all tuple inputs that can also be given as scalars if rank 1
-        //filter_shape = already given as Shape
-        let num_filters  = D num_filters
-        let strd1      = strides .padTo filter_shape
+        let out_channels = if num_filters = 0 then Ds[] else D num_filters
+        let strd         = strides .padTo filter_shape
         let sharing      = asList (len filter_shape) sharing
         let pad          = asList (len filter_shape) pad 
         let dialation    = dialation .padTo filter_shape 
 
-        let emulating_input_depth = if reduction_rank = 0 then 1 else 0
-
-        let num_emulated_axes = emulating_input_depth
-        let strd2 = (D 1) * num_emulated_axes + strd1
-        let sharing = asList num_emulated_axes true @ sharing |> boolVector
-        let pad     = asList num_emulated_axes false @ pad    
-        let autoPadding = asList reduction_rank false @ pad |> boolVector
-        let output_channels_shape = num_filters
-
-        let kernel_shape = 
-            D NDShape.InferredDimension
-            + output_channels_shape
-            + filter_shape
-
-        let output_full_shape = 
-            match output_shape with
-            | None | Some Shape.Unknown -> output_channels_shape
-            | Some (osp:Shape) -> output_channels_shape + osp
-
+        let autoPadding = asList reduction_rank false @ pad 
         let filter_rank = len filter_shape
-        let init_kernel = B._initializer_with_rank (init, filter_rank = filter_rank, output_rank = -1)
 
-        let W = new Parameter(!-kernel_shape, dataType, init_kernel,device,"W")
-        let b = 
-            if bias then
-                new Parameter (
-                    output_channels_shape + (D 1) * filter_rank |> toNDShape, 
-                      dataType, 
-                      init_bias,
-                      device,
-                      "b")
-                  |> Some
+        fun (x:Node) ->
+
+          let input_feature_map_depth = 
+            if x |> shape |> len <= filter_rank then
+              Ds []
             else
-                None
+              (shape>>dims>>List.rev>>List.skip filter_rank>>List.rev>>Ds) x
 
-        let num_inserted_axes = num_emulated_axes
+          let kernel_shape = 
+              input_feature_map_depth
+              + out_channels
+              + filter_shape
 
-        let beginAxis = 
-            if filter_rank <> 0 then 
-                new Axis(-filter_rank)
-            else
-                Axis.EndStaticAxis() //python code's Axis.new_leading_axis() resolves to this
+          let output_full_shape = 
+              match output_shape with
+              | None | Some Shape.Unknown -> out_channels
+              | Some (osp:Shape) -> out_channels + osp
 
-        let endAxis = 
-            if filter_rank <> 0 then
-                new Axis(-filter_rank)
-            else
-                null
+          let init_kernel = B._initializer_with_rank (init, filter_rank = filter_rank, output_rank = -1)
 
-        let x = 
-            if num_inserted_axes <> 0 then
-                C.Reshape (
-                    convVar, 
-                    (D 1) * num_inserted_axes |> toNDShape,
-                    beginAxis,
-                    endAxis
-                    )
-            else
-                !> convVar
+          let W = new Parameter(!--kernel_shape, dataType, init_kernel, device, "W")
+          let b = 
+              if bias then
+                  new Parameter (
+                        !-- (out_channels + (D 1) * filter_rank),
+                        dataType, 
+                        init_bias,
+                        device,
+                        "b")
+              else
+                  null
+          let r = 
+              C.ConvolutionTranspose (
+                  W,
+                  x.Var,
+                  !--strd,
+                  sharing |> List.rev |> boolVector,
+                  autoPadding |> List.rev |> boolVector,
+                  !--output_full_shape,
+                  !--dialation,
+                  uint32 reduction_rank,
+                  uint32 max_temp_mem_size_in_samples
+              )
 
-        let r = 
-            C.ConvolutionTranspose (
-                W,
-                !> x,
-                !-strd2,
-                sharing,
-                autoPadding,
-                !-output_full_shape,
-                !-dialation,
-                uint32 max_temp_mem_size_in_samples
-            )
+          let r = if bias then C.Plus(!>r,b) else r
 
-        let r = match b with Some b -> C.Plus(!>r,b) | None -> r
+          let r = addActivation !>r activation
 
-        L.activation r activation
+          if !Layers.trace then printfn ">> ConvolutionTranspose[%s] %A" name r.Output.Shape.Dimensions
 
-
+          F r

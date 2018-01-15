@@ -1,9 +1,16 @@
-﻿module TstGan
+﻿module Pgm
+open FsCNTK
 open FsCNTK.FsBase
 open FsCNTK.Layers
+open Layers_Dense
+open Layers_BN
+open Layers_ConvolutionTranspose2D
+open Layers_Convolution2D
 open CNTK
-type C = CNTKLib
+open System.IO
 
+type C = CNTKLib
+Layers.trace := true
 let featureStreamName = "features"
 let labelsStreamName = "labels"
 let imageSize = 28 * 28
@@ -19,21 +26,219 @@ let g_output_dim = img_h * img_w
 let d_input_dim = g_output_dim
 let isFast = true
 
-let s_h2, s_w2 = img_h / 2, img_w / 2 //Input shape (14,14)
-let s_h4, s_w4 = img_h / 4, img_w / 4 //Input shape (7,7)
-let gfc_dim = 1024
-let gf_dim = 64
+// the strides to be of the same length along each data dimension
+let gkernel,dkernel =
+    if kernel_h = kernel_w then
+        kernel_h,kernel_h
+    else
+        failwith "This tutorial needs square shaped kernel"
 
-let convolution_generator (n:Node) =
-  n
-  |> Dense {pF with OutShape = D gfs_dim; Name="h0"}
-  |> BN {pf with MapRank=1}
-  |> Activation.ReLU
-  |> Dense {pF with OutShape = Ds [gfc_dim * 2; s_h4; s_w4]; Name="h1"}
-  |> BN {pf with MapRank=1}
-  |> Activation.ReLU
-  |> ConvTrans2D 
-      {pf with 
-        Kernel = D gkernel
+let gstride,dstride =
+    if stride_h = stride_w then
+       stride_h, stride_h
+    else
+        failwith "This tutorial needs same stride in all dims"
 
-      }
+let defaultInit() = C.NormalInitializer(0.2)
+
+let bn_with_relu  = 
+  L.BN (map_rank=1) 
+  >> L.Activation Activation.ReLU
+
+let bn_with_leaky_relu leak = 
+  L.BN (map_rank=1) 
+  >> L.Activation (Activation.PReLU leak)
+
+//generator
+let convolutional_generator =
+
+  let s_h2, s_w2 = img_h / 2, img_w / 2 //Input shape (14,14)
+  let s_h4, s_w4 = img_h / 4, img_w / 4 //Input shape (7,7)
+  let gfc_dim = 1024
+  let gf_dim = 64
+
+  L.Dense (D gfc_dim, name="h0")
+  >> bn_with_relu
+  >> L.Dense(Ds [gf_dim *2; s_h4; s_w4],init=defaultInit(), name="h1")
+  >> bn_with_relu
+  >> L.ConvolutionTranspose2D
+      (
+        D gkernel,
+        num_filters=gf_dim*2,
+        strides=D gstride,
+        pad=true,
+        output_shape=Ds[s_h2; s_w2]
+      )
+  >> bn_with_relu
+  >> L.ConvolutionTranspose2D
+    (
+      D gkernel,
+      num_filters=1,
+      strides=D gstride,
+      pad=true,
+      output_shape=Ds[img_h; img_w]
+    )
+  >> reshape (Ds [ g_output_dim])
+
+
+// discriminator 
+let convolutional_discriminator  =
+
+  let dfc_dim = 1024
+  let df_dim = 64
+
+  reshape (Ds [1; img_h; img_w])
+  >> L.Convolution2D(D dkernel, num_filters=1, strides=D dstride)
+  >> bn_with_leaky_relu 0.2
+  >> L.Convolution2D(D dkernel, num_filters=df_dim,strides=D dstride)
+  >> bn_with_leaky_relu 0.2
+  >> L.Dense (D dfc_dim)
+  >> bn_with_leaky_relu 0.2
+  >> L.Dense(D 1, activation=Activation.Sigmoid)
+
+let minibatch_size = 128u
+let num_minibatches = if isFast then 5000 else 10000
+let lr = 0.0002
+let momentum = 0.5 //equivalent to beta1
+let cntk_samples_folder = @"D:\Repos\cntk231\cntk\Examples\Image\DataSets\MNIST" //from CNTK download
+
+let build_graph noise_shape image_shape generator discriminiator =
+  let input_dynamic_axes = [Axis.DefaultBatchAxis()]
+  let Z = Node.CreateVar(noise_shape,dynamicAxes=input_dynamic_axes)
+
+  let X_real = Node.CreateVar(image_shape,dynamicAxes=input_dynamic_axes)
+  let X_real_scaled = X_real ./ 255.0
+
+  let X_fake = generator Z
+  let D_real = discriminiator X_real_scaled
+
+  let D_fake = D_real |> clone 
+                ParameterCloningMethod.Share 
+                (idict [outputVar X_real_scaled, outputVar X_fake])
+
+             
+  //loss functions generator and discriminator                
+  let G_loss = 1.0 - nLog D_fake
+  let D_loss = - (nLog D_real + nLog(1.0 - D_fake))
+
+
+  let G_learner = C.AdamLearner(
+                      parms X_fake |> parmVector,
+                      new TrainingParameterScheduleDouble(lr,1u),
+                      new TrainingParameterScheduleDouble(momentum))
+
+  let D_learner = C.AdamLearner(
+                      parms D_real |> parmVector,
+                      new TrainingParameterScheduleDouble(lr,1u),
+                      new TrainingParameterScheduleDouble(momentum))
+
+
+  let G_trainer = C.CreateTrainer(X_fake.Func,G_loss.Func,null,lrnVector [G_learner])
+  let D_trainer = C.CreateTrainer(D_real.Func,D_loss.Func,null,lrnVector [D_learner])
+
+  X_real, X_fake, Z, G_trainer, D_trainer   
+
+let streamConfigurations = 
+    ResizeArray<StreamConfiguration>(
+        [
+            new StreamConfiguration(featureStreamName, imageSize)    
+            new StreamConfiguration(labelsStreamName, numClasses)
+        ]
+        )
+
+let minibatchSource = 
+    MinibatchSource.TextFormatMinibatchSource(
+        Path.Combine(cntk_samples_folder, "Train-28x28_cntk_text.txt"), 
+        streamConfigurations, 
+        MinibatchSource.InfinitelyRepeat)
+
+let uniform_sample size =
+    [|
+        for _ in 1 .. size do
+            let r = Probability.RNG.Value.NextDouble()
+            yield  (float32 r - 0.5f) * 2.0f  //[-1,+1]
+    |] 
+    //uniform_sample 20
+
+let noise_sample num_samples =
+    let vals = uniform_sample  (num_samples * g_input_dim)
+    let inp = Value.CreateBatch(create_shape [g_input_dim], vals, device)
+    new MinibatchData(inp,uint32 minibatch_size)
+
+
+let train (reader_train:MinibatchSource) generator discriminator =
+    let X_real, X_fake, Z, G_trainer, D_trainer =
+        build_graph 
+            (D g_input_dim) 
+            (D d_input_dim)
+            generator
+            discriminator
+
+    let featureStreamInfo = reader_train.StreamInfo(featureStreamName)
+    let k = 2 
+    let print_frequency_mbsize = num_minibatches / 25
+    //let pp_G = p()
+    //let pp_D=  p()
+
+    for train_step in 1 .. num_minibatches do
+
+        //train the discriminator for k steps
+        for gen_train_step in 1..k do
+            let Z_data = noise_sample (int minibatch_size)
+            let X_data = reader_train.GetNextMinibatch(minibatch_size)
+            if X_data.[featureStreamInfo].numberOfSamples = Z_data.numberOfSamples then
+                let batch_inputs = 
+                    idict
+                        [
+                            X_real.Var, X_data.[featureStreamInfo]
+                            Z.Var     , Z_data
+                        ]
+                D_trainer.TrainMinibatch(batch_inputs,device) |> ignore
+
+        //train generator
+        let Z_data = noise_sample (int minibatch_size)
+        let batch_inputs = idict [Z.Var, Z_data]
+        let b = G_trainer.TrainMinibatch(batch_inputs,device) //|> ignore 
+        //hmmm python code does it twice
+
+        if train_step % 100 = 0 then
+            let l_D = D_trainer.PreviousMinibatchLossAverage()
+            let l_G = G_trainer.PreviousMinibatchLossAverage()
+            printfn "Minibatch: %d, D_loss=%f, G_loss=%f" train_step l_D l_G
+
+    let G_trainer_loss = G_trainer.PreviousMinibatchLossAverage()
+    Z, X_fake, G_trainer_loss
+
+let reader_train = minibatchSource
+
+let G_input, G_output, G_trainer_loss = train reader_train 
+                                              convolutional_generator 
+                                              convolutional_discriminator
+
+
+(*
+
+let reader_train = minibatchSource
+
+let G_input, G_output, G_trainer_loss = train reader_train 
+                                              convolutional_generator 
+                                              convolutional_discriminator
+
+G_output.Save(Path.Combine(@"D:\repodata\fscntk","GeneratorDCGAN.bin"))
+
+let noise = noise_sample 36
+let outMap = idict[G_output.Output,(null:Value)]
+G_output.Evaluate(idict[G_input,noise.data],outMap,device)
+let imgs = outMap.[G_output.Output].GetDenseData<float32>(G_output.Output)
+
+let sMin,sMax = Seq.collect (fun x->x) imgs |> Seq.min, Seq.collect (fun x->x) imgs |> Seq.max
+let grays = 
+    imgs
+    //|> Seq.map (Seq.map (fun x-> if x < 0.f then 0uy else 255uy)>>Seq.toArray)
+    |> Seq.map (Seq.map (fun x -> scaler (0.,255.) (float sMin, float sMax) (float x) |> byte) >> Seq.toArray)
+    |> Seq.map (ImageUtils.toGray (28,28))
+    |> Seq.toArray
+
+ImageUtils.show grays.[0]
+ImageUtils.showGrid (6,6) grays
+*)

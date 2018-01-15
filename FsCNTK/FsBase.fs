@@ -5,24 +5,64 @@ type C = CNTKLib
 // F# specific supporting and utility functions 
 
 module FsBase =
-  let private create_shape (dims:int seq) = NDShape.CreateNDShape dims
+  let device =   DeviceDescriptor.UseDefaultDevice()
+  let dataType = DataType.Float
+
+  let parmVector (ps:Parameter seq) = 
+      let pv = new ParameterVector(Seq.length ps)
+      ps |>  Seq.iter pv.Add
+      pv
+
+  let lrnVector (ls:Learner seq) =
+      let lv = new LearnerVector(Seq.length ls)
+      ls |>  Seq.iter lv.Add
+      lv
+
+  let boolVector (ls:bool seq) =
+      let lv = new BoolVector(Seq.length ls)
+      ls |>  Seq.iter lv.Add
+      lv
+
+  let prgwVector (pws:ProgressWriter seq) =
+      let pwv = new ProgressWriterVector(Seq.length pws)
+      pws |>  Seq.iter pwv.Add
+      pwv
+
+  let varVector (vs:Variable seq) =
+      let vv = new VariableVector(Seq.length vs)
+      vs |>  Seq.iter vv.Add
+      vv
+
+  let intVector (is:int seq) =
+      let vs = new IntVector(Seq.length is)
+      is |>  Seq.iter vs.Add
+      vs
+
+  let axisVector (is:Axis seq) =
+      let vs = new AxisVector(Seq.length is)
+      is |>  Seq.iter vs.Add
+      vs
+
+  let create_shape (dims:int seq) = NDShape.CreateNDShape dims
 
   //utility operator for F# implicit conversions 
   let inline (!>) (x:^a) : ^b = ((^a or ^b) : (static member op_Implicit : ^a -> ^b) x)
 
   let yourself x = x 
   
-  let scalar dataType x = Constant.Scalar(dataType,x)
+  let scalar x = Constant.Scalar(dataType,x)
 
   //usually, much shape manipulation is done - so a separate type
+ 
   type Shape = D (*size of dimension*) of int | Ds of int list | Unknown 
+
   let dims = function D i -> [i] | Ds is -> is | Unknown -> failwith "unspecified shape"
   let len = function D i -> 1 | Ds is -> List.length is | Unknown -> 0
   let rev = function D i -> D i | Ds is -> List.rev is |> Ds | Unknown -> Unknown
-  let fromNDShape (s:NDShape) = s.Dimensions |> Seq.toList |> Ds
-  let ( !+ ) (s:NDShape) = fromNDShape s
-  let toNDShape = function D i -> create_shape [i] | Ds ds -> create_shape ds | Unknown -> NDShape.Unknown()
-  let ( !- ) s = toNDShape s
+  let private fromNDShape (s:NDShape) = s.Dimensions |> Seq.toList |> Ds
+  let private ( !+ ) (s:NDShape) = fromNDShape s
+  let private toNDShape = function D i -> create_shape [i] | Ds ds -> create_shape ds | Unknown -> NDShape.Unknown()
+  let private ( !- ) s = toNDShape s
   //reverse order of shape dimensions to match .Net / C++ format which is column major
   let ( !-- ) s = s |> rev |> toNDShape
   let ( !++ ) (s:NDShape) = !+ s |> rev
@@ -57,77 +97,84 @@ module FsBase =
           | Ds is, Ds js when is.Length=js.Length -> x
           | _,_ -> failwithf "shape must be singular or the dimensions should match s2"
 
-
-  //type Parms =
-  //  {
-  //    Init          : unit->CNTKDictionary
-  //    Activation    : Activation
-  //    Strides       : Shape
-  //    Dialation     : Shape
-  //    Sharing       : bool list
-  //    AutoPadding   : bool list
-  //    LowerPad      : Shape
-  //    UpperPad      : Shape
-  //    Tranpose      : bool
-  //    OutShape      : Shape
-  //    Kernel        : Shape
-  //    MaxTempMemSz  : int
-  //    Axes          : Axis list
-  //    BeginAxis     : Axis option
-  //    EndAxis       : Axis option
-  //    MapRank       : int
-  //    Name          : string
-  //  } with
-  //  static member Default =
-  //    {
-  //      Init          = fun ()->C.GlorotNormalInitializer()
-  //      Activation    = Activation.NONE
-  //      Strides       = Shape.Unknown
-  //      Dialation     = Shape.Unknown
-  //      Sharing       = []
-  //      AutoPadding   = []
-  //      LowerPad      = Shape.Unknown
-  //      UpperPad      = Shape.Unknown
-  //      Tranpose      = false
-  //      OutShape      = Shape.Unknown
-  //      Kernel        = Shape.Unknown
-  //      MaxTempMemSz  = 0
-  //      Axes          = []
-  //      BeginAxis     = None
-  //      EndAxis       = None
-  //      MapRank       = 1
-  //      Name          = ""
-  //  }
-
-  //type VParms =
-  //  {
-  //    Kind          : VariableKind
-  //    DataType      : DataType
-  //    NeedsGradient : bool
-  //    Value         : NDArrayView
-  //    DynamicAxis   : Axis list
-  //    IsSparse      : bool
-  //  } with
-  //    static member Default =
-  //      {
-  //        Kind          = VariableKind.Input
-  //        DataType      = DataType.Float
-  //        NeedsGradient = true
-  //        DynamicAxis   = []
-  //        Value         = null
-  //        IsSparse      = false
-  //      }
-
-  //let pF = Parms.Default
-  //let vF = VParms.Default
-
+  /// wrapper for CNTK Functions, Variables & Parameters:
+  /// - for shape conversions (CNTK is column-major whereas Python API is row-major)
+  /// - math operators
   type Node =
     | V of Variable
     | F of Function
     | P of Parameter
-    with member x.Var = match x with V v->v | F f -> !> f | P _ -> failwith "not convertible"
+    with 
+
+      member x.Var = match x with V v->v | F f -> !> f | P p -> !> p.ToFunction()
+      member x.Func = match x with V v-> v.ToFunction() | F f -> f | P p -> p.ToFunction()
+
+      static member CreateVar (shape,?kind,?value,?needsGradient,?dynamicAxes,?isSparse,?name,?uid) =
+
+        let kind          = defaultArg kind VariableKind.Input        
+        let value         = defaultArg value null
+        let needsGradient = defaultArg needsGradient true
+        let dynamicAxes   = defaultArg dynamicAxes []
+        let isSparse      = defaultArg isSparse false
+        let name          = defaultArg name ""
+        let uid           = defaultArg uid  ""
+
+        let v             = new Variable(
+                                  !-- shape,
+                                  kind,
+                                  dataType,
+                                  value,
+                                  needsGradient,
+                                  List.rev dynamicAxes |> axisVector,
+                                  isSparse,
+                                  name,
+                                  uid)
+        V v
+      static member CreateParm (shape,?init,?name) =
+        let init = defaultArg init (C.GlorotUniformInitializer())
+        let name = defaultArg name "timesParam"
+        let W = 
+            new Parameter(
+                !-- shape,
+                dataType,
+                init,
+                device, 
+                name)
+        P W
 
   let shape = function
   | V v -> !++ v.Shape
   | F f -> !++ f.Output.Shape
   | P p -> !++ p.Shape
+
+  let reshape shape (n:Node) = C.Reshape(n.Var, !-- shape) |> F
+
+  let outputVar = function 
+    | V v -> v
+    | F f -> f.Output
+    | P p -> p.ToFunction().Output
+
+  let parms = function 
+    | F f -> f.Parameters() 
+    | V v -> v.ToFunction().Parameters()
+    | P p -> p.ToFunction().Parameters()
+
+  let clone method substitutions = function
+    | V v -> v.ToFunction().Clone(ParameterCloningMethod.Share,substitutions) |> F
+    | F f -> f.Clone(ParameterCloningMethod.Share,substitutions) |> F
+    | P p -> p.ToFunction().Clone(ParameterCloningMethod.Share,substitutions) |> F
+
+  let nLog (x:Node) = C.Log(x.Var) |> F
+
+  type Node with 
+    static member ( ./ ) (n:Node,d:float) = C.ElementDivide(n.Var, scalar d) |> F
+
+    static member ( - ) (l:Node, r:Node) = C.Minus(l.Var, r.Var) |> F
+    static member ( - ) (l:float, r:Node) = C.Minus(scalar l, r.Var) |> F
+    static member ( - ) (l:Node, r:float) = C.Minus(l.Var, scalar r) |> F
+    static member ( ~- ) (n:Node) = C.Negate(n.Var) |> F
+
+    static member ( + ) (l:Node, r:Node) = C.Plus(l.Var, r.Var) |> F
+    static member ( + ) (l:float, r:Node) = C.Plus(scalar l, r.Var) |> F
+    static member ( + ) (l:Node, r:float) = C.Plus(l.Var, scalar r) |> F
+
