@@ -103,6 +103,16 @@ let spinWheel wheel =
     let r = RNG.Value.NextDouble()
     wheel |> Array.pick(fun (k,w) -> if w > r then Some k else None)
 
+let scaler (sMin,sMax) (vMin,vMax) (v:float) =
+    if v < vMin then failwith "out of min range for scaling"
+    if v > vMax then failwith "out of max range for scaling"
+    (v - vMin) / (vMax - vMin) * (sMax - sMin) + sMin
+    (*
+    scaler (0.1, 0.9) (10., 500.) 223.
+    scaler (0.1, 0.9) (10., 500.) 10.
+    scaler (0.1, 0.9) (10., 500.) 500.
+    scaler (0.1, 0.9) (-200., -100.) -110.
+    *)
    
 (*
 #load "Probability.fs"

@@ -5,7 +5,8 @@ type C = CNTKLib
 // F# specific supporting and utility functions 
 
 module FsBase =
-  let device =   DeviceDescriptor.UseDefaultDevice()
+  //let device = DeviceDescriptor.UseDefaultDevice()
+  let device = DeviceDescriptor.GPUDevice(0) //should be configurable
   let dataType = DataType.Float
 
   let parmVector (ps:Parameter seq) = 
