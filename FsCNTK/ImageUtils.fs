@@ -17,7 +17,7 @@ let private scaler (sMin,sMax) (vMin,vMax) (v:float) =
     *)
 
 let toGray (w,h) (vals:byte[]) =
-    let xs = vals |> Seq.collect (fun g ->  [255uy; g; g; g])|> Seq.toArray
+    let xs = vals |> Seq.collect (fun g ->  [g; g; g; 255uy])|> Seq.toArray
     let bmp = new Bitmap(w,h,Imaging.PixelFormat.Format32bppArgb)
     let data = bmp.LockBits(
                     new Rectangle(0, 0, bmp.Width, bmp.Height),

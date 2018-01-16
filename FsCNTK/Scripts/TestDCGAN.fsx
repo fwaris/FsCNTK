@@ -24,7 +24,7 @@ let g_input_dim = 100
 let g_output_dim = img_h * img_w
 
 let d_input_dim = g_output_dim
-let isFast = true
+let isFast = false
 
 // the strides to be of the same length along each data dimension
 let gkernel,dkernel =
@@ -99,7 +99,7 @@ let convolutional_discriminator  =
   >> L.Dense(D 1, activation=Activation.Sigmoid, name="D=h3")
 
 let minibatch_size = 128u
-let num_minibatches = if isFast then 2 else 200000
+let num_minibatches = if isFast then 2 else 500000
 let lr = 0.0002
 let momentum = 0.5 //equivalent to beta1
 let cntk_samples_folder = @"D:\Repos\cntk231\cntk\Examples\Image\DataSets\MNIST" //from CNTK download
@@ -219,17 +219,23 @@ let G_input, G_output, G_trainer_loss = train reader_train
                                               convolutional_discriminator
 
 G_output.Func.Save(Path.Combine(@"D:\repodata\fscntk","GeneratorDCGAN.bin"))
+G_output.Func.Save(Path.Combine(@"D:\repodata\fscntk","GeneratorDCGAN.bin"))
+G_output.Func.Save(Path.Combine(@"D:\repodata\fscntk","GeneratorDCGAN.bin"))
+#load "SetEnv.fsx"
 
 let noise = noise_sample 36
 let outMap = idict[G_output.Func.Output,(null:Value)]
 G_output.Func.Evaluate(idict[G_input.Var,noise.data],outMap,device)
 let imgs = outMap.[G_output.Func.Output].GetDenseData<float32>(G_output.Func.Output)
 
-let sMin,sMax = Seq.collect (fun x->x) imgs |> Seq.min, Seq.collect (fun x->x) imgs |> Seq.max
+let sMin,sMax,mid = 
+    Seq.collect (fun x->x) imgs |> Seq.min, 
+    Seq.collect (fun x->x) imgs |> Seq.max, 
+    Seq.collect (fun x->x) imgs |> Seq.average
 let grays = 
     imgs
-    //|> Seq.map (Seq.map (fun x-> if x < 0.f then 0uy else 255uy)>>Seq.toArray)
-    |> Seq.map (Seq.map (fun x -> Probability.scaler (0.,255.) (float sMin, float sMax) (float x) |> byte) >> Seq.toArray)
+    |> Seq.map (Seq.map (fun x-> if x < 0.6f then 0uy else 255uy)>>Seq.toArray)
+    //|> Seq.map (Seq.map (fun x -> Probability.scaler (0.,255.) (float sMin, float sMax) (float x) |> byte) >> Seq.toArray)
     |> Seq.map (ImageUtils.toGray (28,28))
     |> Seq.toArray
 
