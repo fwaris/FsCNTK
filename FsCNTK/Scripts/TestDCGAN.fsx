@@ -28,7 +28,7 @@ let g_input_dim = 100
 let g_output_dim = img_h * img_w
 
 let d_input_dim = g_output_dim
-let isFast = false
+let isFast = true
 
 // the strides to be of the same length along each data dimension
 let gkernel,dkernel =
@@ -106,7 +106,8 @@ let minibatch_size = 128u
 let num_minibatches = if isFast then 2 else 500000
 let lr = 0.0002
 let momentum = 0.5 //equivalent to beta1
-let cntk_samples_folder = @"D:\Repos\cntk231\cntk\Examples\Image\DataSets\MNIST" //from CNTK download
+//let cntk_samples_folder = @"D:\Repos\cntk231\cntk\Examples\Image\DataSets\MNIST" //from CNTK download
+let cntk_samples_folder = @"F:\s\cntk\Examples\Image\DataSets\MNIST" //from CNTK download
 
 let build_graph noise_shape image_shape generator discriminiator =
   let input_dynamic_axes = [Axis.DefaultBatchAxis()]
@@ -217,6 +218,8 @@ let train (reader_train:MinibatchSource) generator discriminator =
 
 
 let reader_train = minibatchSource
+//let d = reader_train.GetNextMinibatch(128u)
+//d.Keys
 
 //train model - can take a while even on a GPU if fast=false
 let G_input, G_output, G_trainer_loss = train reader_train 
