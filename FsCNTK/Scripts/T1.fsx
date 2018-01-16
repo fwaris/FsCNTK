@@ -10,6 +10,8 @@ open Layers_Convolution2D
 open CNTK
 open System.IO
 
+//scratch pad
+
 type C = CNTKLib
 
 let imageSize = 28 * 28

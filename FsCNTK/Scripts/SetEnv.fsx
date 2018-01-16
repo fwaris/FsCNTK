@@ -13,11 +13,11 @@ Environment.SetEnvironmentVariable("Path",
 //change it for you installation (e.g. GPU vs CPU)
 let baseDir = @"..\..\packages\CNTK.GPU.2.3.1CNTK.GPU.2.3.1\"
 let dependencies = [
-        //Path.Combine(baseDir,"lib/net45/x64/")
-        //Path.Combine(baseDir,"support/x64/Dependency/")
-        //Path.Combine(baseDir,"support/x64/Dependency/Debug/")
-        //Path.Combine(baseDir,"support/x64/Debug/")
-        @"D:\Repos\cntk231\cntk\x64\Debug"
+        Path.Combine(baseDir,"lib/net45/x64/")
+        Path.Combine(baseDir,"support/x64/Dependency/")
+        Path.Combine(baseDir,"support/x64/Dependency/Debug/")
+        Path.Combine(baseDir,"support/x64/Debug/")
+        //@"D:\Repos\cntk231\cntk\x64\Debug"
     ]
 
 dependencies 
@@ -32,8 +32,8 @@ dependencies
 //#I @"../../packages/CNTK.GPU.2.3.1/support/x64/Dependency/Release/"
 //#I @"../../packages/CNTK.GPU.2.3.1/support/x64/Release/"
 
-//#r @"..\..\packages\CNTK.GPU.2.3.1\lib\net45\x64\Cntk.Core.Managed-2.3.1.dll"
-#r @"D:\Repos\cntk231\cntk\x64\Debug\Cntk.Core.Managed-2.3.1d.dll"
+#r @"..\..\packages\CNTK.GPU.2.3.1\lib\net45\x64\Cntk.Core.Managed-2.3.1.dll"
+//#r @"D:\Repos\cntk231\cntk\x64\Debug\Cntk.Core.Managed-2.3.1d.dll"
 
 #load "..\ImageUtils.fs"
 #load "..\Probability.fs"

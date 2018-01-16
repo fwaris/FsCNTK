@@ -9,6 +9,10 @@ open Layers_Convolution2D
 open CNTK
 open System.IO
 
+//Train a generative model using adversarial training to generate handwritten digits
+//See this tutorial for background documentation: 
+// https://cntk.ai/pythondocs/CNTK_206B_DCGAN.html
+
 type C = CNTKLib
 Layers.trace := true
 let featureStreamName = "features"
@@ -214,14 +218,12 @@ let train (reader_train:MinibatchSource) generator discriminator =
 
 let reader_train = minibatchSource
 
+//train model - can take a while even on a GPU if fast=false
 let G_input, G_output, G_trainer_loss = train reader_train 
                                               convolutional_generator 
                                               convolutional_discriminator
 
-G_output.Func.Save(Path.Combine(@"D:\repodata\fscntk","GeneratorDCGAN.bin"))
-G_output.Func.Save(Path.Combine(@"D:\repodata\fscntk","GeneratorDCGAN.bin"))
-G_output.Func.Save(Path.Combine(@"D:\repodata\fscntk","GeneratorDCGAN.bin"))
-#load "SetEnv.fsx"
+// G_output.Func.Save(Path.Combine(@"D:\repodata\fscntk","GeneratorDCGAN.bin"))
 
 let noise = noise_sample 36
 let outMap = idict[G_output.Func.Output,(null:Value)]
@@ -232,6 +234,7 @@ let sMin,sMax,mid =
     Seq.collect (fun x->x) imgs |> Seq.min, 
     Seq.collect (fun x->x) imgs |> Seq.max, 
     Seq.collect (fun x->x) imgs |> Seq.average
+
 let grays = 
     imgs
     |> Seq.map (Seq.map (fun x-> if x < 0.6f then 0uy else 255uy)>>Seq.toArray)
@@ -239,7 +242,6 @@ let grays =
     |> Seq.map (ImageUtils.toGray (28,28))
     |> Seq.toArray
 
-ImageUtils.show grays.[0]
 ImageUtils.showGrid (6,6) grays
 (*
 *)
