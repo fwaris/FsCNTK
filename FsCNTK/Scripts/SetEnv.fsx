@@ -1,8 +1,21 @@
-﻿(*
-This file is intended to load dependencies in an F# script,
-to train a model from the scripting environment.
-CNTK, CPU only, is assumed to have been installed via Paket.
-*)
+﻿
+(******** 
+Note: This code is to reference dlls and native libs in
+the CNTK nuget package. Adjust as needed for CPU or GPU versions
+
+If this does not work, an alternative is to get the
+the CNTK binary 'release' package from GitHub and 
+save it to a local folder after extraction. 
+
+Releases Page: https://github.com/Microsoft/CNTK/releases 
+
+Put the directory that contains the binary files (dll's and libs)
+on the windows Path. For the current iteration its the 'cntk' folder 
+under the main extract.
+
+Then reference the managed library - Cntk.Core.Managed-x.x.x.dll - from the same location for the script
+and the lib compilation
+*******)
 
 open System
 open System.IO
