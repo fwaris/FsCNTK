@@ -15,6 +15,7 @@ open System.IO
 
 type C = CNTKLib
 Layers.trace := true
+let isFast = true
 let featureStreamName = "features"
 let labelsStreamName = "labels"
 let imageSize = 28 * 28
@@ -28,7 +29,6 @@ let g_input_dim = 100
 let g_output_dim = img_h * img_w
 
 let d_input_dim = g_output_dim
-let isFast = true
 
 // the strides to be of the same length along each data dimension
 let gkernel,dkernel =
@@ -106,8 +106,8 @@ let minibatch_size = 128u
 let num_minibatches = if isFast then 2 else 500000
 let lr = 0.0002
 let momentum = 0.5 //equivalent to beta1
-//let cntk_samples_folder = @"D:\Repos\cntk231\cntk\Examples\Image\DataSets\MNIST" //from CNTK download
-let cntk_samples_folder = @"F:\s\cntk\Examples\Image\DataSets\MNIST" //from CNTK download
+let cntk_samples_folder = @"D:\Repos\cntk231\cntk\Examples\Image\DataSets\MNIST" //from CNTK download
+//let cntk_samples_folder = @"F:\s\cntk\Examples\Image\DataSets\MNIST" //from CNTK download
 
 let build_graph noise_shape image_shape generator discriminiator =
   let input_dynamic_axes = [Axis.DefaultBatchAxis()]
@@ -128,6 +128,10 @@ let build_graph noise_shape image_shape generator discriminiator =
   let G_loss = 1.0 - nLog D_fake
   let D_loss = - (nLog D_real + nLog(1.0 - D_fake))
 
+  G_loss.Func.Save(Path.Combine(@"D:\repodata\fscntk","G_loss.bin"))
+  D_loss.Func.Save(Path.Combine(@"D:\repodata\fscntk","D_loss.bin"))
+  D_fake.Func.Save(Path.Combine(@"D:\repodata\fscntk","D_fake.bin"))
+  D_real.Func.Save(Path.Combine(@"D:\repodata\fscntk","D_real.bin"))
 
   let G_learner = C.AdamLearner(
                       parms X_fake |> parmVector,
@@ -180,7 +184,7 @@ let train (reader_train:MinibatchSource) generator discriminator =
             (D d_input_dim)
             generator
             discriminator
-
+    
     let featureStreamInfo = reader_train.StreamInfo(featureStreamName)
     let k = 2 
     let print_frequency_mbsize = num_minibatches / 25
@@ -226,7 +230,7 @@ let G_input, G_output, G_trainer_loss = train reader_train
                                               convolutional_generator 
                                               convolutional_discriminator
 
-// G_output.Func.Save(Path.Combine(@"D:\repodata\fscntk","GeneratorDCGAN.bin"))
+// G_output.Func.Save(Path.Combine(@"D:\repodata\fscntk","Generator_Trained.bin"))
 
 let noise = noise_sample 36
 let outMap = idict[G_output.Func.Output,(null:Value)]
@@ -240,7 +244,7 @@ let sMin,sMax,mid =
 
 let grays = 
     imgs
-    |> Seq.map (Seq.map (fun x-> if x < 0.6f then 0uy else 255uy)>>Seq.toArray)
+    |> Seq.map (Seq.map (fun x-> if x < 0.f then 0uy else 255uy)>>Seq.toArray)
     //|> Seq.map (Seq.map (fun x -> Probability.scaler (0.,255.) (float sMin, float sMax) (float x) |> byte) >> Seq.toArray)
     |> Seq.map (ImageUtils.toGray (28,28))
     |> Seq.toArray

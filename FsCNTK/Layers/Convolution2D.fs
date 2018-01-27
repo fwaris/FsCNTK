@@ -6,9 +6,6 @@ open Blocks
 open Layers
 open Layers_Convolution
 
-//based on python layers module (see CNTK Python API for documentation)
-//mimics python code closely
-
 module Layers_Convolution2D =
   type L with
 

@@ -63,11 +63,13 @@
     <Compile Include="Blocks.fs" />
     <Compile Include="Layers\LayersBase.fs" />
     <Compile Include="Layers\Dense.fs" />
+    <Compile Include="Layers\Dropout.fs" />
     <Compile Include="Layers\BatchNormalization.fs" />
     <Compile Include="Layers\Convolution.fs" />
     <Compile Include="Layers\Convolution2D.fs" />
     <Compile Include="Layers\ConvolutionTranspose.fs" />
     <Compile Include="Layers\ConvolutionTranspose2D.fs" />
+    <Compile Include="Layers\Recurrence.fs" />
     <Compile Include="TstGan.fs" />
     <None Include="Scripts\SetEnv.fsx" />
     <None Include="Scripts\TestDCGAN.fsx" />

@@ -5,8 +5,6 @@ open FsBase
 open Blocks
 open Layers
 
-//based on python layers module (see CNTK Python API for documentation)
-//mimics python code closely
 
 module Layers_Dense =
 
@@ -42,7 +40,6 @@ module Layers_Dense =
         fun (x:Node) ->
 
           //python uses late binding so shape is inferred
-          //let input_shape = D NDShape.InferredDimension * (match input_rank with None -> 1 | Some r -> r)
           //here we can just use the shape given
           let input_shape = shape x
             
