@@ -59,10 +59,10 @@ module Layers_Convolution =
         fun (x:Node) ->
 
           let input_feature_map_depth = 
-            if x |> shape |> len <= filter_rank then
+            if x |> O.shape |> len <= filter_rank then
               Ds []
             else
-              (shape>>dims>>List.rev>>List.skip filter_rank>>List.rev>>Ds) x
+              (O.shape>>dims>>List.rev>>List.skip filter_rank>>List.rev>>Ds) x
 
           let kernel_shape = 
               out_channels
@@ -97,8 +97,8 @@ module Layers_Convolution =
 
           let r = if bias then C.Plus(!>r,b) else r
 
-          let r = addActivation !>r activation
+          let r = addActivation (F r) activation
 
-          if !Layers.trace then printfn ">> Convolution[%s] %A" name r.Output.Shape.Dimensions
+          if !Layers.trace then printfn ">> Convolution[%s] %A" name (r |> O.shape |> dims)
 
-          F r
+          r

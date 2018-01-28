@@ -81,7 +81,7 @@ module Layers_Recurrence =
 
       fun (x:Node) ->
         let b = new Parameter(!--             cell_shape_stacked   , init_bias, device, "b")
-        let W = new Parameter(!--(shape x +   cell_shape_stacked)  , dataType, init, device, "W")
+        let W = new Parameter(!--(O.shape x +   cell_shape_stacked)  , dataType, init, device, "W")
         let H = new Parameter(!--(out_shape + cell_shape_stacked_H), dataType, init, device, "H")
 
         let H1 = 
@@ -168,9 +168,9 @@ module Layers_Recurrence =
           h
 
         match cellType with
-        | LSTM    -> lstm 
-        | GRU     -> gru
-        | RNNStep -> rnn_step
+        | LSTM    -> lstm x
+        | GRU     -> gru x
+        | RNNStep -> rnn_step x
 
     static member Recurrence
         (

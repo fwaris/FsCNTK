@@ -107,10 +107,10 @@ module FsBase =
     | P of Parameter
     with 
 
-      member x.Var = match x with V v->v | F f -> !> f | P p -> !> p.ToFunction()
-      member x.Func = match x with V v-> v.ToFunction() | F f -> f | P p -> p.ToFunction()
+      member x.Var = match x with V v -> v | F f -> !> f | P p -> !> p.ToFunction()
+      member x.Func = match x with V v -> v.ToFunction() | F f -> f | P p -> p.ToFunction()
 
-      static member CreateVar (shape,?kind,?value,?needsGradient,?dynamicAxes,?isSparse,?name,?uid) =
+      static member Variable (shape,?kind,?value,?needsGradient,?dynamicAxes,?isSparse,?name,?uid) =
 
         let kind          = defaultArg kind VariableKind.Input        
         let value         = defaultArg value null
@@ -131,9 +131,10 @@ module FsBase =
                                   name,
                                   uid)
         V v
-      static member CreateParm (shape,?init,?name) =
+                    
+      static member Parm (shape,?init,?name) =
         let init = defaultArg init (C.GlorotUniformInitializer())
-        let name = defaultArg name "timesParam"
+        let name = defaultArg name ""
         let W = 
             new Parameter(
                 !-- shape,
@@ -143,32 +144,65 @@ module FsBase =
                 name)
         P W
 
-  let shape = function
-  | V v -> !++ v.Shape
-  | F f -> !++ f.Output.Shape
-  | P p -> !++ p.Shape
+      static member Parm (shape,?init,?name) =
+        let init = defaultArg init 0.
+        let name = defaultArg name ""
+        let W = 
+            new Parameter(
+                !-- shape,
+                dataType,
+                init,
+                device, 
+                name)
+        P W
 
-  let reshape shape (n:Node) = C.Reshape(n.Var, !-- shape) |> F
+  [<RequireQualifiedAccess>]
+  module O =
 
-  let outputVar = function 
-    | V v -> v
-    | F f -> f.Output
-    | P p -> p.ToFunction().Output
+    let shape = function
+    | V v -> !++ v.Shape
+    | F f -> !++ f.Output.Shape
+    | P p -> !++ p.Shape
 
-  let parms = function 
-    | F f -> f.Parameters() 
-    | V v -> v.ToFunction().Parameters()
-    | P p -> p.ToFunction().Parameters()
+    let reshape shape (n:Node) = C.Reshape(n.Var, !-- shape) |> F
 
-  let clone method substitutions = function
-    | V v -> v.ToFunction().Clone(ParameterCloningMethod.Share,substitutions) |> F
-    | F f -> f.Clone(ParameterCloningMethod.Share,substitutions) |> F
-    | P p -> p.ToFunction().Clone(ParameterCloningMethod.Share,substitutions) |> F
+    let outputVar = function 
+      | V v -> v
+      | F f -> f.Output
+      | P p -> p.ToFunction().Output
 
-  let nLog (x:Node) = C.Log(x.Var) |> F
+    let parms = function 
+      | F f -> f.Parameters() 
+      | V v -> v.ToFunction().Parameters()
+      | P p -> p.ToFunction().Parameters()
+
+    let clone method substitutions = function
+      | V v -> v.ToFunction().Clone(ParameterCloningMethod.Share,substitutions) |> F
+      | F f -> f.Clone(ParameterCloningMethod.Share,substitutions) |> F
+      | P p -> p.ToFunction().Clone(ParameterCloningMethod.Share,substitutions) |> F
+
+    let log (x:Node) = C.Log(x.Var) |> F
+
+    let slice axis beginIndex endIndex (x:Node) = C.Slice (x.Var, axis, intVector beginIndex, intVector endIndex) |> F
+
+    let sigmod (n:Node) = C.Sigmoid(n.Var) |> F
+
+    let softplus (n:Node) = C.Softplus(n.Var) |> F
+
+    ///swaps multiplication order to match Python API
+    let times (l:Node, r:Node, name:string) = C.Times(r.Var,l.Var,name) |> F 
+    let times2 (l:Node, r:Node, output_rank, infer_input_rank_to_map, name:string) = 
+      C.Times(r.Var, l.Var ,uint32 output_rank,infer_input_rank_to_map, name )
 
   type Node with 
     static member ( ./ ) (n:Node,d:float) = C.ElementDivide(n.Var, scalar d) |> F
+    static member ( ./ ) (n:Node,d:Node) = C.ElementDivide(n.Var, d.Var) |> F
+
+    static member ( .* ) (l:Node,r:float) = C.ElementTimes(l.Var, scalar r) |> F
+    static member ( .* ) (l:float,r:Node) = C.ElementTimes(scalar l, r.Var) |> F
+    static member ( .* ) (l:Node,r:Node) = C.ElementTimes(l.Var, r.Var) |> F
+
+    static member ( * ) (l:Node,r:Node) = O.times(l,r,"")
 
     static member ( - ) (l:Node, r:Node) = C.Minus(l.Var, r.Var) |> F
     static member ( - ) (l:float, r:Node) = C.Minus(scalar l, r.Var) |> F
@@ -178,4 +212,6 @@ module FsBase =
     static member ( + ) (l:Node, r:Node) = C.Plus(l.Var, r.Var) |> F
     static member ( + ) (l:float, r:Node) = C.Plus(scalar l, r.Var) |> F
     static member ( + ) (l:Node, r:float) = C.Plus(l.Var, scalar r) |> F
+
+
 

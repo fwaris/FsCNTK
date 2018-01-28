@@ -26,14 +26,14 @@ module Layers =
       s |> Seq.iter d.Add
       d
 
-  let internal addActivation (v:Variable) = function
-      | Activation.NONE       ->              !>v
-      | Activation.ReLU       -> C.ReLU       v
-      | Activation.LeakyReLU  -> C.LeakyReLU  v
-      | Activation.Sigmoid    -> C.Sigmoid    v
-      | Activation.Tanh       -> C.Tanh       v
-      | Activation.PReLU c    -> let alpha = new Constant(v.Shape, dataType, c)
-                                 C.PReLU(alpha,v)
+  let internal addActivation (n:Node) = function
+      | Activation.NONE       ->              n
+      | Activation.ReLU       -> C.ReLU       n.Var   |> F
+      | Activation.LeakyReLU  -> C.LeakyReLU  n.Var   |> F
+      | Activation.Sigmoid    -> C.Sigmoid    n.Var   |> F
+      | Activation.Tanh       -> C.Tanh       n.Var   |> F
+      | Activation.PReLU c    -> let alpha = new Constant(!--(O.shape n), dataType, c)
+                                 C.PReLU(alpha,n.Var) |> F
 
 type L =
 
@@ -53,5 +53,5 @@ type L =
 
   static member Activation actType (n:Node) =
       if !Layers.trace then printfn ">> Activation"
-      Layers.addActivation n.Var actType |> F
+      Layers.addActivation n actType
         

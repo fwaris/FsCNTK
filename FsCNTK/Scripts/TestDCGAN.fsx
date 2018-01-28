@@ -84,7 +84,7 @@ let convolutional_generator =
       output_shape=Ds[img_h; img_w],
       name="G h3"
     )
-  >> reshape (Ds [ g_output_dim])
+  >> O.reshape (Ds [ g_output_dim])
 
 
 // discriminator 
@@ -93,7 +93,7 @@ let convolutional_discriminator  =
   let dfc_dim = 1024
   let df_dim = 64
 
-  reshape (Ds [1; img_h; img_w])
+  O.reshape (Ds [1; img_h; img_w])
   >> L.Convolution2D(D dkernel, num_filters=1, strides=D dstride, name="D h0")
   >> bn_with_leaky_relu 0.2
   >> L.Convolution2D(D dkernel, num_filters=df_dim,strides=D dstride, name="D h1")
@@ -111,22 +111,22 @@ let cntk_samples_folder = @"D:\Repos\cntk231\cntk\Examples\Image\DataSets\MNIST"
 
 let build_graph noise_shape image_shape generator discriminiator =
   let input_dynamic_axes = [Axis.DefaultBatchAxis()]
-  let Z = Node.CreateVar(noise_shape,dynamicAxes=input_dynamic_axes)
+  let Z = Node.Variable(noise_shape,dynamicAxes=input_dynamic_axes)
 
-  let X_real = Node.CreateVar(image_shape,dynamicAxes=input_dynamic_axes)
+  let X_real = Node.Variable(image_shape,dynamicAxes=input_dynamic_axes)
   let X_real_scaled = X_real ./ 255.0
 
   let X_fake = generator Z
   let D_real = discriminiator X_real_scaled
 
-  let D_fake = D_real |> clone 
+  let D_fake = D_real |> O.clone 
                 ParameterCloningMethod.Share 
-                (idict [outputVar X_real_scaled, outputVar X_fake])
+                (idict [O.outputVar X_real_scaled, O.outputVar X_fake])
 
              
   //loss functions generator and discriminator                
-  let G_loss = 1.0 - nLog D_fake
-  let D_loss = - (nLog D_real + nLog(1.0 - D_fake))
+  let G_loss = 1.0 - O.log D_fake
+  let D_loss = - (O.log D_real + O.log(1.0 - D_fake))
 
   G_loss.Func.Save(Path.Combine(@"D:\repodata\fscntk","G_loss.bin"))
   D_loss.Func.Save(Path.Combine(@"D:\repodata\fscntk","D_loss.bin"))
@@ -134,12 +134,12 @@ let build_graph noise_shape image_shape generator discriminiator =
   D_real.Func.Save(Path.Combine(@"D:\repodata\fscntk","D_real.bin"))
 
   let G_learner = C.AdamLearner(
-                      parms X_fake |> parmVector,
+                      O.parms X_fake |> parmVector,
                       new TrainingParameterScheduleDouble(lr,1u),
                       new TrainingParameterScheduleDouble(momentum))
 
   let D_learner = C.AdamLearner(
-                      parms D_real |> parmVector,
+                      O.parms D_real |> parmVector,
                       new TrainingParameterScheduleDouble(lr,1u),
                       new TrainingParameterScheduleDouble(momentum))
 
