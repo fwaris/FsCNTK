@@ -189,6 +189,8 @@ module FsBase =
 
     let softplus (n:Node) = C.Softplus(n.Var) |> F
 
+    let squared_error (prediction:Node, targets:Node) = C.SquaredError(prediction.Var,targets.Var) |> F
+
     ///swaps multiplication order to match Python API
     let times (l:Node, r:Node, name:string) = C.Times(r.Var,l.Var,name) |> F 
     let times2 (l:Node, r:Node, output_rank, infer_input_rank_to_map, name:string) = 

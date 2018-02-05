@@ -10,7 +10,7 @@ type Activation =
     | ReLU
     | Sigmoid
     | Tanh
-    | LeakyReLU
+    | LeakyReLU of float option
     | PReLU of float
 
 //based on python layers module (see CNTK Python API for documentation)
@@ -27,13 +27,13 @@ module Layers =
       d
 
   let internal addActivation (n:Node) = function
-      | Activation.NONE       ->              n
-      | Activation.ReLU       -> C.ReLU       n.Var   |> F
-      | Activation.LeakyReLU  -> C.LeakyReLU  n.Var   |> F
-      | Activation.Sigmoid    -> C.Sigmoid    n.Var   |> F
-      | Activation.Tanh       -> C.Tanh       n.Var   |> F
-      | Activation.PReLU c    -> let alpha = new Constant(!--(O.shape n), dataType, c)
-                                 C.PReLU(alpha,n.Var) |> F
+      | Activation.NONE        ->              n
+      | Activation.ReLU        -> C.ReLU       n.Var   |> F
+      | Activation.LeakyReLU c -> C.LeakyReLU(n.Var,float32 (match c with None->0.3 | Some c ->c))   |> F
+      | Activation.Sigmoid     -> C.Sigmoid    n.Var   |> F
+      | Activation.Tanh        -> C.Tanh       n.Var   |> F
+      | Activation.PReLU c     -> let alpha = new Constant(!--(O.shape n), dataType, c)
+                                  C.PReLU(alpha,n.Var) |> F
 
 type L =
 
