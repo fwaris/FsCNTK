@@ -12,6 +12,8 @@ type Activation =
     | Tanh
     | LeakyReLU of float option
     | PReLU of float
+    | SELU
+    | ELU
 
 //based on python layers module (see CNTK Python API for documentation)
 //mimics python code as closely as feasible
@@ -32,6 +34,8 @@ module Layers =
       | Activation.LeakyReLU c -> C.LeakyReLU(n.Var,float32 (match c with None->0.3 | Some c ->c))   |> F
       | Activation.Sigmoid     -> C.Sigmoid    n.Var   |> F
       | Activation.Tanh        -> C.Tanh       n.Var   |> F
+      | Activation.SELU        -> C.SELU       n.Var   |> F
+      | Activation.ELU         -> C.ELU        n.Var   |> F
       | Activation.PReLU c     -> let alpha = new Constant(!--(O.shape n), dataType, c)
                                   C.PReLU(alpha,n.Var) |> F
 

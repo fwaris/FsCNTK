@@ -8,17 +8,19 @@ open CNTK
 open System.IO
 open FsCNTK.FsBase
 open System.Collections.Generic
+open Probability
 
 type CNTKLib = C
 
-//let data = Node.Variable(Ds[58 + 11], dynamicAxes=[Axis.DefaultBatchAxis()])
-let inp = Node.Variable(D 58, dynamicAxes=[Axis.DefaultBatchAxis()]) //O.slice (axisVector [new Axis(0)]) [0] [57] data
-let outp = Node.Variable(D 11, dynamicAxes=[Axis.DefaultBatchAxis()]) // O.slice (axisVector [new Axis(0)]) [58] [58+11] data
+let inp = Node.Variable(D 58, dynamicAxes=[Axis.DefaultBatchAxis()]) 
+let outp = Node.Variable(D 11, dynamicAxes=[Axis.DefaultBatchAxis()])
 
-let model = 
-  L.Dense(D 6,activation=Activation.Tanh) 
-  >> L.Dropout(dropout_rate=0.25) 
-  >> L.Dense(D 11)
+let model (inp:Node) = 
+  let dim = 3
+  let l1 = L.Dense(D dim,activation=Activation.Tanh) >> L.Dropout(dropout_rate=0.25) 
+  let skipL =  L.Dense(D dim, activation=Activation.SELU) 
+  ((inp |> l1 |> skipL) + (l1 inp)) |> L.Dense(D 11)
+
 
 let pred = model inp
 
@@ -43,26 +45,23 @@ let records = dataFile |> File.ReadAllLines |> Seq.length
 let trainSz = float records * 0.70 |> int
 let testSz = records - trainSz
 
-let X = 
-  dataFile
-  |> File.ReadAllLines
-  |> Seq.map (fun s->s.Split([|'\t'|]) |> Array.filter (fun x->System.String.IsNullOrWhiteSpace x |> not))
-  |> Seq.map (fun xs -> xs |> Array.take inputSz)
-  |> Seq.map (Seq.map float32 >> Seq.toArray)
-  |> Seq.toArray
+let data = 
+  let d =
+    dataFile
+    |> File.ReadAllLines
+    |> Seq.map (fun s->s.Split([|'\t'|]) |> Array.filter (fun x->System.String.IsNullOrWhiteSpace x |> not))
+    |> Seq.map (Seq.map float32>>Seq.toArray)
+    |> Seq.toArray
+  Array.shuffle d
+  d
 
-let Y = 
-  dataFile
-  |> File.ReadAllLines
-  |> Seq.map (fun s->s.Split([|'\t'|]) |> Array.filter (fun x->System.String.IsNullOrWhiteSpace x |> not))
-  |> Seq.map (fun xs -> xs |> Array.skip inputSz)
-  |> Seq.map (Seq.map float32 >> Seq.toArray)
-  |> Seq.toArray
+let testData = data |> Array.take trainSz
+let trainData = data |> Array.skip trainSz
 
-let X_train = X |> Array.take trainSz 
-let Y_train = Y |> Array.take trainSz 
-let X_test  = X |> Array.skip trainSz 
-let Y_test  = Y |> Array.skip trainSz 
+let X_train = trainData |> Array.map (Array.take inputSz) 
+let Y_train = trainData |> Array.map (Array.skip inputSz) 
+let X_test  = testData |> Array.map (Array.take inputSz)
+let Y_test  = testData |> Array.map (Array.skip inputSz)
 
 let X_trainBatch = Value.CreateBatch(!-- (O.shape inp), X_train |> Array.collect yourself, device)
 let Y_trainBatch = Value.CreateBatch(!-- (O.shape outp), Y_train |> Array.collect yourself, device)
@@ -100,7 +99,8 @@ let eval() =
     ||> Array.fold (fun acc (a,b) -> Array.zip a b |> Array.iteri(fun i (a,b) -> acc.[i] <-  acc.[i] + (a-b)*(a-b)); acc)
   let rmse = sumSqrs |> Array.map (fun x -> x / float32 Y_test.Length) |> Array.map sqrt 
   rmse
-//  ASPEN
+
+// Original
 //43.35856
 //32.6162
 //24.24676
@@ -125,12 +125,6 @@ let eval() =
 //12.5
 //12.4
 //8.4
-
-(*
-train()
-test()
-eval()
-*)
 
 (*
 let model = 
@@ -222,6 +216,16 @@ let model =
   >> L.Dense(D 11)
 [|28.0927391f; 20.403038f; 18.071516f; 13.6054668f; 19.2439785f; 21.988903f;
     23.0910168f; 20.1121693f; 13.5672083f; 12.1169605f; 9.44756794f|]
+let model (inp:Node) = 
+  let dim = 3
+  let l1 = L.Dense(D dim,activation=Activation.Tanh) >> L.Dropout(dropout_rate=0.25) 
+  let skipL =  L.Dense(D dim, activation=Activation.SELU) 
+  ((inp |> l1 |> skipL) + (l1 inp)) |> L.Dense(D 11)
+ [|54.7022133f; 36.7688637f; 24.4712639f; 13.413847f; 37.1073418f;
+    42.5674057f; 44.7219543f; 36.5981293f; 20.6601696f; 15.1724834f;
+    11.1061411f|]
+
+****
 let model = 
   L.Dense(D 6,activation=Activation.Tanh) 
   >> L.Dropout(dropout_rate=0.25) 
@@ -230,3 +234,11 @@ let model =
     19.5633659f; 19.8775024f; 18.1389008f; 12.0414429f; 12.3985281f;
     9.01100922f|]
    *)
+
+   (*
+train()
+test()
+eval()
+*)
+
+

@@ -58,43 +58,33 @@ let d2 =
       )
 
 let tm()=
-  let Z = Node.CreateVar(D g_input_dim,dynamicAxes=[Axis.DefaultBatchAxis()])
+  let Z = Node.Variable(D g_input_dim,dynamicAxes=[Axis.DefaultBatchAxis()])
   let dout = d2 Z
-  shape dout
+  O.shape dout
 
 let tct()=
   let f = L.ConvolutionTranspose(Ds [3;4], 128, output_shape=Ds[482;643],pad=false)
-  let Z = Node.CreateVar(Ds [3;480;640],dynamicAxes=[Axis.DefaultBatchAxis()])
+  let Z = Node.Variable(Ds [3;480;640],dynamicAxes=[Axis.DefaultBatchAxis()])
   let m = f Z
-  shape m
+  O.shape m
   ()
 
 let tctb()=
-  let Z = Node.CreateVar(Ds [3;480;640],dynamicAxes=[Axis.DefaultBatchAxis()])
+  let Z = Node.Variable(Ds [3;480;640],dynamicAxes=[Axis.DefaultBatchAxis()])
   let p = new Parameter(!--( Ds[3;128;3;4]), dataType,0.,device,"w")
   let osp = Ds[128;482;643]
   let f = C.ConvolutionTranspose(p,Z.Var,!-- (D 1),boolVector[true],boolVector[false],!--osp)
   let fn = F f 
-  shape fn
+  O.shape fn
 
   ()
 
-let t1() =
-  let x = Node.CreateVar(Ds [128;7;7], dynamicAxes=[Axis.DefaultBatchAxis()])
-  let W = Node.CreateParm(Ds [128;5;5])
-  let out = Ds [128;14;14]
-  let st  = D 1
-  let s = boolVector [true]
-  let p = boolVector [true]
-  let c = C.ConvolutionTranspose(W.Var,x.Var,!--st,s,p,!--out) |> F
-  shape c
-
 let t2() =
-  let x = Node.CreateVar(Ds [1024], dynamicAxes=[Axis.DefaultBatchAxis()])
-  let w = Node.CreateParm(Ds [1024; 128;7;7])
+  let x = Node.Variable(Ds [1024], dynamicAxes=[Axis.DefaultBatchAxis()])
+  let w = Node.Variable(Ds [1024; 128;7;7])
 
   w.Var.Shape.Dimensions
   x.Var.Shape.Dimensions
 
   let p = C.Times(w.Var,x.Var, 3u, 0) |> F
-  shape p
+  O.shape p

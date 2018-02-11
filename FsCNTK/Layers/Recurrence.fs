@@ -5,11 +5,59 @@ open FsBase
 open Blocks
 open Layers
 
-module Layers_Recurrence =
+#nowarn "25"
 
+module Layers_Recurrence =
+  open FsBase
+  
   type private Cell = LSTM | GRU | RNNStep
+          
+  type StepFunction = int (*number of states*) * (Node list (*states*) -> Node (* input *) -> Node list)
+
+  type private RParms =
+    {
+        //shape related
+        stack_axis            : AxisVector
+        stacked_dim           : int
+        cell_shape_stacked    : Shape
+        cell_shape_stacked_H  : Shape
+        cell_shape            : Shape
+        //stabilizations
+        Sdh                   : Node -> Node 
+        Sdc                   : Node -> Node
+        Sct                   : Node -> Node
+        Sht                   : Node -> Node
+        //parameters
+        b                     : Node
+        W                     : Node
+        H                     : Node
+        H1                    : Node option
+        //output projection
+        Wmr                   : Node option
+    }
 
   type L with
+
+    static member private delay (x:Node,initial_state, time_step, name) =
+      let initial_state = match initial_state with Some (v:Node) -> v.Var | None -> (scalar 0.0) :> Variable
+      let out =
+        if time_step > 0 then
+          C.PastValue(x.Var, initial_state,uint32 time_step,name) 
+        elif time_step = 0 then
+          C.FutureValue(x.Var,initial_state,uint32 time_step,name)
+        else
+          if name="" then
+            x.Func
+          else
+            C.Alias(x.Var,name) 
+      F out
+        
+
+    static member Delay(?initial_state:Node, ?time_step, ?name) =
+      //let initial_state = match initial_state with Some (v:Node) -> v.Var | None -> (scalar 0.0) :> Variable
+      let time_step = defaultArg time_step 1
+      let name = defaultArg name ""
+      fun (x:Node) -> L.delay (x,initial_state,time_step,name)
 
     static member Stabilizer
       (
@@ -27,25 +75,26 @@ module Layers_Recurrence =
           else
             let init_parm = Math.Log(Math.Exp(float steepness) - 1.0) / (float steepness)
             let param = Node.Parm(Ds[],init=init_parm,name="alpha")
-            //let param = new Parameter(!-- Ds[], dataType, init_parm, device, "alpha")
-            let param = if steepness = 1 then param else (float steepness) .* param // !> C.ElementTimes((scalar (float steepness)), param)
-            let beta = O.softplus param // C.Softplus(param)
-            let r = beta .* x//C.ElementTimes(!> beta, x.Var)
+            let param = if steepness = 1 then param else (float steepness) .* param 
+            let beta = O.softplus param 
+            let r = beta .* x
             r
-
 
     static member private RecurrentBlock
       (
         cellType,
         out_shape,
         cell_shape,
-        (init:CNTKDictionary)
+        enable_self_stabilization,
+        (init:CNTKDictionary),
+        (init_bias:float),
+        (x:Node)
       )
       =      
       let has_projection,cell_shape = 
         match cell_shape with 
         | Shape.Unknown -> false,out_shape 
-        | c             -> true,c
+        | c             -> true,c //what if the cell shape is same as output?
       
       let Wmr = 
           if has_projection 
@@ -53,11 +102,11 @@ module Layers_Recurrence =
           else None
 
       if len out_shape <> 1 || len cell_shape <> 1 then
-        failwithf "LSTM shape and cell_shape must be vectors"
+        failwithf "%A shape and cell_shape must be vectors" cellType
 
       //see python code and comment in blocks.py
       //for stacking of multiple variables along the fastest changing
-      //dimension for efficient communication 
+      //dimension for efficient computation 
       let stacked_dim = cell_shape |> dims |> List.last // or first as only 1 dimension
 
       let stacked_dim = stacked_dim * match cellType with 
@@ -74,145 +123,256 @@ module Layers_Recurrence =
 
       let cell_shape_stacked_H  = D stacked_dim_h
 
-      stacked_dim, cell_shape_stacked, cell_shape_stacked_H, Wmr
+      let Sdh = L.Stabilizer(enable_self_stabilization=enable_self_stabilization, name="dh_stabilizer")
+      let Sdc = L.Stabilizer(enable_self_stabilization=enable_self_stabilization, name="dc_stabilizer")
+      let Sct = L.Stabilizer(enable_self_stabilization=enable_self_stabilization, name="c_stabilizer")
+      let Sht = L.Stabilizer(enable_self_stabilization=enable_self_stabilization, name="P_stabilizer")
 
-    static member private LSTM
+      let b = Node.Parm(               cell_shape_stacked,   init=init_bias, name="b")
+      let W = Node.Parm(   O.shape x + cell_shape_stacked,   init=init, name="W")
+      let H = Node.Parm(   out_shape + cell_shape_stacked_H, init=init, name="H")
+
+      let H1 = 
+        match cellType with 
+        | GRU -> Node.Parm(out_shape + cell_shape          , init=init, name="H1") |> Some
+        | _   -> None
+
+      {
+          stack_axis            = axisVector [new Axis(-1)] 
+          stacked_dim           = stacked_dim
+          cell_shape_stacked    = cell_shape_stacked
+          cell_shape_stacked_H  = cell_shape_stacked_H
+          cell_shape            = cell_shape
+          Sdh                   = Sdh 
+          Sdc                   = Sdc
+          Sct                   = Sct
+          Sht                   = Sht
+          b                     = b
+          W                     = W
+          H                     = H
+          H1                    = H1
+          Wmr                   = Wmr
+      }
+
+    static member LSTM
       (
-        cellType,
         out_shape,
         ?cell_shape,
         ?activation,
+        ?enable_self_stabilization,
         ?init,
         ?init_bias,
         //?use_peephole, - not that useful according to "LSTM: A Search Space Odyssey", https://arxiv.org/pdf/1503.04069.pdf
-        ?enable_self_stabilization,
         ?name
       )
+      : StepFunction
       =
       let activation = defaultArg activation Activation.Tanh
       let init = defaultArg init (C.GlorotUniformInitializer())
       let init_bias = defaultArg init_bias 0.0
       let enable_self_stabilization = defaultArg enable_self_stabilization false
       let name = defaultArg name ""
-      fun (x:Node) ->
-        let stacked_dim, cell_shape_stacked, cell_shape_stacked_H,Wmr = 
+
+
+      //Great reference: http://colah.github.io/posts/2015-08-Understanding-LSTMs/
+      let lstm (x:Node) (dh,dc)   =
+        let rp =
             L.RecurrentBlock
               (
                   Cell.LSTM, 
                   out_shape,
                   defaultArg cell_shape Shape.Unknown,
-                  init
-
-
+                  enable_self_stabilization,
+                  init,
+                  init_bias,
+                  x
               )
-        let b = Node.Parm(               cell_shape_stacked,   init=init_bias, name="b")
-        let W = Node.Parm(   O.shape x + cell_shape_stacked,   init=init, name="W")
-        let H = Node.Parm(   out_shape + cell_shape_stacked_H, init=init, name="H")
 
-        let H1 = 
-          match cellType with 
-          | GRU -> Node.Parm(out_shape + cell_shape          , init=init, name="H1") |> Some
-          | _   -> None
-        
-        
-        let Sdh = L.Stabilizer(enable_self_stabilization=enable_self_stabilization, name="dh_stabilizer")
-        let Sdc = L.Stabilizer(enable_self_stabilization=enable_self_stabilization, name="dc_stabilizer")
-        let Sct = L.Stabilizer(enable_self_stabilization=enable_self_stabilization, name="c_stabilizer")
-        let Sht = L.Stabilizer(enable_self_stabilization=enable_self_stabilization, name="P_stabilizer")
+        let dhs = rp.Sdh(dh) //stabilized previous output 
+        let dcs = rp.Sdc(dc) //stabilized previous cell state
 
-        let stack_axis = axisVector [new Axis(-1)] 
-
-        let applyActvn v = (L.Activation activation (F v)).Var //utility funciton to apply activation 
-
-        //Great reference: http://colah.github.io/posts/2015-08-Understanding-LSTMs/
-        let lstm (x:Node) dh dc   =
-          let dhs = Sdh(dh) //stabilized previous output 
-          let dcs = Sdc(dc) //stabilized previous cell state
-
-          //projected contribution from inputs(s), hidden and bias
-          let proj4 = b +  (x * W) + (dhs * H) 
+        //projected contribution from inputs(s), hidden and bias
+        let proj4 = rp.b +  (x * rp.W) + (dhs * rp.H) 
           
-          let it_proj  = proj4 |> O.slice stack_axis [0*stacked_dim] [1*stacked_dim]  // split along stack_axis
-          let bit_proj = proj4 |> O.slice stack_axis [1*stacked_dim] [2*stacked_dim]
-          let ft_proj  = proj4 |> O.slice stack_axis [2*stacked_dim] [3*stacked_dim]
-          let ot_proj  = proj4 |> O.slice stack_axis [3*stacked_dim] [4*stacked_dim]
+        let it_proj  = proj4 |> O.slice rp.stack_axis [0*rp.stacked_dim] [1*rp.stacked_dim]  // split along stack_axis
+        let bit_proj = proj4 |> O.slice rp.stack_axis [1*rp.stacked_dim] [2*rp.stacked_dim]
+        let ft_proj  = proj4 |> O.slice rp.stack_axis [2*rp.stacked_dim] [3*rp.stacked_dim]
+        let ot_proj  = proj4 |> O.slice rp.stack_axis [3*rp.stacked_dim] [4*rp.stacked_dim]
 
-          let it  = O.sigmod it_proj                //input gate(t)
-          let bit = it .* (L.Activation activation it)// (C.Times(!>it,applyActvn bit_proj)   //applied to tanh of input network
-          let ft  = O.sigmod ft_proj //C.Sigmoid(!>ft_proj)                //forget-me-not gate(t)
-          let bft = ft .* dc /// C.ElementTimes(!>ft,dc.Var)             //applied to cell(t-1)
-          let ct  = bft + bit //C.Plus(!>bft, !>bit)                  //c(t) is sum of both
-          let ot  = O.sigmod ot_proj // C.Sigmoid(!>ot_proj)                //output gate(t)
-          let ht  = ot .* (L.Activation activation ct)// C.ElementTimes(!>ot,applyActvn ct)  //applied to tanh(cell(t))
+        let it  = O.sigmod it_proj                          //input gate(t)
+        let bit = it .* (L.Activation activation bit_proj)  //applied to tanh of input network
+        let ft  = O.sigmod ft_proj                          //forget-me-not gate(t)
+        let bft = ft .* dc                                  //applied to cell(t-1)
+        let ct  = bft + bit                                 //c(t) is sum of both
+        let ot  = O.sigmod ot_proj                          //output gate(t)
+        let ht  = ot .* (L.Activation activation ct)        //applied to tanh(cell(t))
 
-          let c = ct                                  //cell value
-          let h = match Wmr with Some w -> (Sht ht) * w | None -> ht //if has_projection then C.Times(Wmr, !>Sht(F ht)) else ht
+        let c = ct                                          //cell value
+        let h = match rp.Wmr with Some w -> (rp.Sht ht) * w | None -> ht //if has_projection then C.Times(Wmr, !>Sht(F ht)) else ht
 
-          h,c
+        h,c
+      2 (*number of states*), fun (h::c::_) (x:Node) -> let (h',c') = lstm x (h,c) in (h'::c'::[])
 
-        let gru (x:Node) dh =
+    static member GRU
+      (
+        out_shape,
+        ?cell_shape,
+        ?activation,
+        ?init,
+        ?init_bias,
+        ?enable_self_stabilization,
+        ?name
+      )
+      : StepFunction
+      =
+      let activation = defaultArg activation Activation.Tanh
+      let init = defaultArg init (C.GlorotUniformInitializer())
+      let init_bias = defaultArg init_bias 0.0
+      let enable_self_stabilization = defaultArg enable_self_stabilization false
+      let name = defaultArg name ""
 
-          let dhs = Sdh(dh) //previous value stabilized
+      let gru (x:Node) dh =
 
-          let projx3 = C.Plus(b, !> C.Times( W, x.Var))
-          let projh2 = C.Times(H, dhs.Var)
+        let rp =
+            L.RecurrentBlock
+              (
+                  Cell.GRU, 
+                  out_shape,
+                  defaultArg cell_shape Shape.Unknown,
+                  enable_self_stabilization,
+                  init,
+                  init_bias,
+                  x
+              )
 
-          let zt_proj = C.Plus
-                          (
-                            !> (C.Slice (!>projx3, stack_axis, intVector [0*stacked_dim], intVector [1*stacked_dim])),
-                            !> (C.Slice (!>projh2, stack_axis, intVector [0*stacked_dim], intVector [1*stacked_dim]))
-                          )
-          let rt_proj = C.Plus
-                          (
-                            !>(C.Slice (!>projx3, stack_axis, intVector [1*stacked_dim], intVector [2*stacked_dim])),
-                            !>(C.Slice (!>projh2, stack_axis, intVector [1*stacked_dim], intVector [2*stacked_dim]))
-                          )
-          let ct_proj = C.Slice (!>projx3, stack_axis, intVector [2*stacked_dim], intVector [3*stacked_dim])
+        let dhs = rp.Sdh(dh) //previous value stabilized
+        let projx3 = rp.b + (x * rp.W) 
+        let projh2 = dhs * rp.H 
 
-          let zt = C.Sigmoid (!>zt_proj)        // update gate z(t)
-          let rt = C.Sigmoid (!>rt_proj)        // reset gate r(t)
-          let rs = C.ElementTimes(dhs.Var,!>rt)     // "cell" c
-          let ct = applyActvn (C.Plus(!>ct_proj, !>C.Times(H1, !>rs)))
+        let zt_proj = (projx3 |> O.slice rp.stack_axis [0*rp.stacked_dim] [1*rp.stacked_dim])
+                      +
+                      (projh2 |> O.slice rp.stack_axis [0*rp.stacked_dim] [1*rp.stacked_dim])
 
-          //Python:  ht = (1 - zt) * ct + zt * dhs
-          let ht = C.Plus(!>C.ElementTimes(!>C.Minus(scalar 1., !>zt),ct),!>C.ElementTimes(!>zt, !>dhs)) // hidden state ht / output
+        let rt_proj = (projx3 |> O.slice rp.stack_axis [1*rp.stacked_dim] [2*rp.stacked_dim])
+                      +
+                      (projh2 |> O.slice rp.stack_axis [1*rp.stacked_dim] [2*rp.stacked_dim])
 
-          let h = if has_projection then C.Times(Wmr,Sht(F ht).Var) else ht
+        let ct_proj =  projx3 |> O.slice rp.stack_axis [2*rp.stacked_dim] [3*rp.stacked_dim]
 
-          F h
 
-        let rnn_step (x:Node) dh  =
-          let dhs = Sdh(dh)
-          let ht = applyActvn (C.Plus(b,!>C.Plus(!>C.Times(W,x.Var),!>C.Times(H,dhs.Var))))
-          let h  = if has_projection then !> (C.Times(Wmr,!>Sht(V ht))) else ht
-          h
+        let zt = O.sigmod zt_proj   // update gate z(t)
+        let rt = O.sigmod rt_proj   // reset gate r(t)
+        let rs = dhs .* rt          // "cell" c
 
-        match cellType with
-        | LSTM    -> lstm x
-        | GRU     -> gru x
-        | RNNStep -> rnn_step x
+        let ct = L.Activation activation (ct_proj + (rs * rp.H1.Value)) 
+
+        //Python:  ht = (1 - zt) * ct + zt * dhs
+        let ht = (1. - zt) .* ct + (zt .* dhs) 
+
+        let h = match rp.Wmr with Some w -> (rp.Sht ht) * w | None -> ht 
+
+        h
+
+      1,fun (h::_) (x:Node) ->  [gru x h]
+
+
+    static member RnnStep
+      (
+        out_shape,
+        ?cell_shape,
+        ?activation,
+        ?init,
+        ?init_bias,
+        ?enable_self_stabilization,
+        ?name
+      )
+      : StepFunction
+      =
+      let activation = defaultArg activation Activation.Tanh
+      let init = defaultArg init (C.GlorotUniformInitializer())
+      let init_bias = defaultArg init_bias 0.0
+      let enable_self_stabilization = defaultArg enable_self_stabilization false
+      let name = defaultArg name ""
+
+      let rnn_step (x:Node) dh =
+
+        let rp =
+            L.RecurrentBlock
+              (
+                  Cell.RNNStep, 
+                  out_shape,
+                  defaultArg cell_shape Shape.Unknown,
+                  enable_self_stabilization,
+                  init,
+                  init_bias,
+                  x
+              ) 
+        let dhs = rp.Sdh(dh)
+
+        let ht = L.Activation activation (rp.b + (x * rp.W) + (dhs * rp.H))
+        let h = match rp.Wmr with Some w -> (rp.Sht ht) * w | None -> ht //if has_projection then C.Times(Wmr, !>Sht(F ht)) else ht
+
+        h
+
+      1,fun (h::_) (x:Node) ->  [rnn_step x h]
+
+    static member RecurrenceFrom 
+      (
+       step_function:StepFunction, 
+       ?go_backwards,
+       ?name
+      )
+      =
+      let go_backwards = defaultArg  go_backwards true
+      let name = defaultArg name ""
+
+      let num_states,func = step_function
+
+      fun  states (x:Node) ->
+
+        let time_step = if go_backwards then -1 else 1
+
+        if num_states <> List.length states then failwith "number of states should match step function"
+
+        let out_forward_vars = 
+          states 
+          |> List.map (fun s ->  
+            Node.Variable
+              (
+                O.shape s, 
+                kind=VariableKind.Placeholder,
+                dynamicAxes=(x.Var.DynamicAxes |> Seq.toList),
+                name=O.name s))
+        
+        let prev_out_vars =  
+          List.zip states out_forward_vars 
+          |> List.map (fun (s,ps) -> L.delay(ps,Some s,time_step,name))
+
+        let states' = func prev_out_vars x
+
+        let states' = 
+          List.zip states' prev_out_vars 
+          |> List.map (fun (s',prevS) -> s'.Var.Owner.ReplacePlaceholders(idict[prevS.Var,s'.Var]) |> F)
+
+        states' 
 
     static member Recurrence
-        (
-            ?dropout_rate,
-            ?keep_prob,
-            ?seed,
-            ?name
-        )                            
-        =
-        let drop_rate = 
-          match dropout_rate,keep_prob with
-          | None  , None   -> failwith "Dropout: either dropout_rate or keep_prob must be specified."
-          | Some _, Some _ -> failwith "Dropout: dropout_rate and keep_prob cannot be specified at the same time."
-          | _     , Some k when  k < 0.0 || k >= 1.0 -> failwith "Dropout: keep_prob must be in the interval [0,1)"
-          | _     , Some k -> 1.0 - k
-          | Some d, _      -> d
+      (
+       step_function:StepFunction, 
+       ?go_backwards,
+       ?initial_states,
+       ?name
+      )                            
+      =
+      let go_backwards = defaultArg  go_backwards true
+      let name = defaultArg name ""
+      let num_states,_ = step_function
 
-        fun (x:Node) ->
-          let r =
-            match seed with
-            | Some s ->  C.Dropout(x.Var, drop_rate, uint32 s)
-            | None   ->  C.Dropout(x.Var ,drop_rate)
-
-          F r
+      let initial_states = 
+        match initial_states with
+        | None -> [for i in [1..num_states] -> scalar 0. :> Variable |> V ]
+        | Some rs -> rs
       
+      let recurrence_from = L.RecurrenceFrom(step_function,go_backwards=go_backwards,name=name)
+
+      fun (x:Node) -> recurrence_from initial_states x

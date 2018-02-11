@@ -166,6 +166,8 @@ module FsBase =
 
     let reshape shape (n:Node) = C.Reshape(n.Var, !-- shape) |> F
 
+    let name = function V v -> v.Name | F f -> f.Name | P p -> p.Name
+
     let outputVar = function 
       | V v -> v
       | F f -> f.Output
