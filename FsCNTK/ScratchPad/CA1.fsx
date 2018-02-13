@@ -1,4 +1,4 @@
-﻿#load "SetEnv.fsx"
+﻿#load "..\Scripts\SetEnv.fsx"
 open FsCNTK
 open FsCNTK.FsBase
 open FsCNTK.Layers

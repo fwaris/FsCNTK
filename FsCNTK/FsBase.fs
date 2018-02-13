@@ -126,7 +126,7 @@ module FsBase =
                                   dataType,
                                   value,
                                   needsGradient,
-                                  List.rev dynamicAxes |> axisVector,
+                                  dynamicAxes |> axisVector,
                                   isSparse,
                                   name,
                                   uid)

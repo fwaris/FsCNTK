@@ -12,7 +12,7 @@ module Layers_Recurrence =
   
   type private Cell = LSTM | GRU | RNNStep
           
-  type StepFunction = int (*number of states*) * (Node list (*states*) -> Node (* input *) -> Node list)
+  type StepFunction = Shape list (*shapes of states*) * (Node list (*states*) -> Node (* input *) -> Node list)
 
   type private RParms =
     {
@@ -39,7 +39,11 @@ module Layers_Recurrence =
   type L with
 
     static member private delay (x:Node,initial_state, time_step, name) =
-      let initial_state = match initial_state with Some (v:Node) -> v.Var | None -> (scalar 0.0) :> Variable
+      let initial_state = 
+        match initial_state with 
+        | Some (v:Node) -> v.Var 
+        | None -> Node.Variable(D NDShape.InferredDimension, kind=VariableKind.Constant).Var
+
       let out =
         if time_step > 0 then
           C.PastValue(x.Var, initial_state,uint32 time_step,name) 
@@ -107,16 +111,16 @@ module Layers_Recurrence =
       //see python code and comment in blocks.py
       //for stacking of multiple variables along the fastest changing
       //dimension for efficient computation 
-      let stacked_dim = cell_shape |> dims |> List.last // or first as only 1 dimension
+      let cell_dim = cell_shape |> dims |> List.last // or first as only 1 dimension
 
-      let stacked_dim = stacked_dim * match cellType with 
+      let stacked_dim = cell_dim * match cellType with 
                                       | RNNStep ->  1 
                                       | GRU     ->  3 //3 gates
                                       | LSTM    ->  4 //4 gates
 
       let cell_shape_stacked = D stacked_dim
 
-      let stacked_dim_h = stacked_dim * match cellType with 
+      let stacked_dim_h = cell_dim * match cellType with 
                                         | RNNStep ->  1 
                                         | GRU     ->  2 
                                         | LSTM    ->  4
@@ -139,7 +143,7 @@ module Layers_Recurrence =
 
       {
           stack_axis            = axisVector [new Axis(-1)] 
-          stacked_dim           = stacked_dim
+          stacked_dim           = cell_dim
           cell_shape_stacked    = cell_shape_stacked
           cell_shape_stacked_H  = cell_shape_stacked_H
           cell_shape            = cell_shape
@@ -192,7 +196,13 @@ module Layers_Recurrence =
         let dcs = rp.Sdc(dc) //stabilized previous cell state
 
         //projected contribution from inputs(s), hidden and bias
-        let proj4 = rp.b +  (x * rp.W) + (dhs * rp.H) 
+        let prj1 = (x * rp.W) 
+        let prj2 = (dhs * rp.H) 
+        let proj4 = rp.b + prj1 + prj2
+
+          //rp.b 
+          //+  (x * rp.W) 
+          //+ (dhs * rp.H) 
           
         let it_proj  = proj4 |> O.slice rp.stack_axis [0*rp.stacked_dim] [1*rp.stacked_dim]  // split along stack_axis
         let bit_proj = proj4 |> O.slice rp.stack_axis [1*rp.stacked_dim] [2*rp.stacked_dim]
@@ -211,7 +221,12 @@ module Layers_Recurrence =
         let h = match rp.Wmr with Some w -> (rp.Sht ht) * w | None -> ht //if has_projection then C.Times(Wmr, !>Sht(F ht)) else ht
 
         h,c
-      2 (*number of states*), fun (h::c::_) (x:Node) -> let (h',c') = lstm x (h,c) in (h'::c'::[])
+
+      let h_shape = out_shape
+      let c_shape = defaultArg cell_shape out_shape
+
+      //step_function
+      [h_shape; c_shape], fun (h::c::_) (x:Node) -> let (h',c') = lstm x (h,c) in (h'::c'::[])
 
     static member GRU
       (
@@ -272,8 +287,9 @@ module Layers_Recurrence =
         let h = match rp.Wmr with Some w -> (rp.Sht ht) * w | None -> ht 
 
         h
-
-      1,fun (h::_) (x:Node) ->  [gru x h]
+      
+      //step_function
+      [out_shape],fun (h::_) (x:Node) ->  [gru x h]
 
 
     static member RnnStep
@@ -314,7 +330,7 @@ module Layers_Recurrence =
 
         h
 
-      1,fun (h::_) (x:Node) ->  [rnn_step x h]
+      [out_shape],fun (h::_) (x:Node) ->  [rnn_step x h]
 
     static member RecurrenceFrom 
       (
@@ -326,35 +342,48 @@ module Layers_Recurrence =
       let go_backwards = defaultArg  go_backwards true
       let name = defaultArg name ""
 
-      let num_states,func = step_function
+      let state_shapes,func = step_function
 
       fun  states (x:Node) ->
 
         let time_step = if go_backwards then -1 else 1
 
-        if num_states <> List.length states then failwith "number of states should match step function"
+        if state_shapes.Length <> List.length states then failwith "number of states should match step function"
 
         let out_forward_vars = 
-          states 
-          |> List.map (fun s ->  
+          List.zip states state_shapes 
+          |> List.map (fun (n,s) ->  
             Node.Variable
               (
-                O.shape s, 
+                s, 
                 kind=VariableKind.Placeholder,
                 dynamicAxes=(x.Var.DynamicAxes |> Seq.toList),
-                name=O.name s))
-        
-        let prev_out_vars =  
-          List.zip states out_forward_vars 
-          |> List.map (fun (s,ps) -> L.delay(ps,Some s,time_step,name))
+                name=O.name n))
 
-        let states' = func prev_out_vars x
+        let out_vars = func out_forward_vars x
+        let out_actual = out_vars |> List.map (fun v -> L.delay(v,None,time_step,""))
 
-        let states' = 
-          List.zip states' prev_out_vars 
-          |> List.map (fun (s',prevS) -> s'.Var.Owner.ReplacePlaceholders(idict[prevS.Var,s'.Var]) |> F)
+        let o1 = out_vars.[0].Func
 
-        states' 
+        List.zip out_forward_vars out_actual
+        |> List.iter (fun (fw,ac) -> o1.ReplacePlaceholders(idict[fw.Var,ac.Var]) |> ignore )
+
+        out_vars
+
+
+        //let prev_out_vars =  
+        //  List.zip states out_forward_vars 
+        //  |> List.map (fun (s,ps) -> L.delay(ps,Some s,time_step,name))
+
+        //let states' = func prev_out_vars x
+
+        //let l1 = states'.[0].Func 
+
+        //let states' = 
+        //  List.zip states' prev_out_vars 
+        //  |> List.map (fun (s',prevS) -> l1.ReplacePlaceholders(idict[prevS.Var,s'.Var]) |> F)
+
+        //states' 
 
     static member Recurrence
       (
@@ -364,15 +393,23 @@ module Layers_Recurrence =
        ?name
       )                            
       =
-      let go_backwards = defaultArg  go_backwards true
-      let name = defaultArg name ""
-      let num_states,_ = step_function
+      fun (x:Node) -> 
+        let go_backwards = defaultArg  go_backwards true
+        let name = defaultArg name ""
+        let state_shapes,_ = step_function
 
-      let initial_states = 
-        match initial_states with
-        | None -> [for i in [1..num_states] -> scalar 0. :> Variable |> V ]
-        | Some rs -> rs
+        let initial_states = 
+          match initial_states with
+          | None -> state_shapes |> List.map (fun s -> 
+            Node.Variable
+              (
+                s,
+                kind=VariableKind.Placeholder, 
+                dynamicAxes=(x.Var.DynamicAxes |> Seq.toList)
+              ))
+          | Some rs -> rs
       
-      let recurrence_from = L.RecurrenceFrom(step_function,go_backwards=go_backwards,name=name)
+        let recurrence_from = L.RecurrenceFrom(step_function,go_backwards=go_backwards,name=name)
 
-      fun (x:Node) -> recurrence_from initial_states x
+        if !Layers.trace then printfn ">> Recurrence with %A" initial_states
+        recurrence_from initial_states x

@@ -23,30 +23,31 @@ Future nuget packages may move need packages around and so this code may become 
 open System
 open System.IO
 
-Environment.SetEnvironmentVariable("Path",
-    Environment.GetEnvironmentVariable("Path") + ";" + __SOURCE_DIRECTORY__)
+//Environment.SetEnvironmentVariable("Path",
+//    Environment.GetEnvironmentVariable("Path") + ";" + __SOURCE_DIRECTORY__)
 
-let pkgdir =  __SOURCE_DIRECTORY__ + @"..\..\..\packages"
+//let pkgdir =  __SOURCE_DIRECTORY__ + @"..\..\..\packages"
 
-let fullPath paths = Path.GetFullPath(Path.Combine(paths))
+//let fullPath paths = Path.GetFullPath(Path.Combine(paths))
 
-//change these for you installation (e.g. GPU vs CPU)
-let dependencies = [
-      @"CNTK.Deps.Cuda.2.4.0\support\x64\Dependency"
-      @"CNTK.Deps.cuDNN.2.4.0\support\x64\Dependency"
-      @"CNTK.Deps.MKL.2.4.0\support\x64\Dependency"
-      @"CNTK.Deps.OpenCV.Zip.2.4.0\support\x64\Dependency"
-      @"CNTK.Deps.OpenCV.Zip.2.4.0\support\x64\Dependency\Release"
-      @"CNTK.GPU.2.4.0\support\x64\Release"
-    ]
+////change these for you installation (e.g. GPU vs CPU)
+//let dependencies = [
+//      @"CNTK.Deps.Cuda.2.4.0\support\x64\Dependency"
+//      @"CNTK.Deps.cuDNN.2.4.0\support\x64\Dependency"
+//      @"CNTK.Deps.MKL.2.4.0\support\x64\Dependency"
+//      @"CNTK.Deps.OpenCV.Zip.2.4.0\support\x64\Dependency"
+//      @"CNTK.Deps.OpenCV.Zip.2.4.0\support\x64\Dependency\Release"
+//      @"CNTK.GPU.2.4.0\support\x64\Release"
+//    ]
 
-dependencies 
-|> Seq.iter (fun dep -> 
-    Environment.SetEnvironmentVariable("Path",
-        fullPath [|pkgdir;dep|] + ";" + Environment.GetEnvironmentVariable("Path"))
-    )    
+//dependencies 
+//|> Seq.iter (fun dep -> 
+//    Environment.SetEnvironmentVariable("Path",
+//        fullPath [|pkgdir;dep|] + ";" + Environment.GetEnvironmentVariable("Path"))
+//    )    
 
-#r @"..\..\packages\CNTK.GPU.2.4.0\lib\net45\x64\Cntk.Core.Managed-2.4.dll"
+//#r @"..\..\packages\CNTK.GPU.2.4.0\lib\net45\x64\Cntk.Core.Managed-2.4.dll"
+#r @"D:\Repos\cntk\x64\Debug\Cntk.Core.Managed-2.4d.dll"
 
 #load "..\ImageUtils.fs"
 #load "..\Probability.fs"
@@ -60,4 +61,5 @@ dependencies
 #load "..\Layers\Convolution2D.fs"
 #load "..\Layers\ConvolutionTranspose.fs"
 #load "..\Layers\ConvolutionTranspose2D.fs"
+#load "..\Layers\Recurrence.fs"
 
