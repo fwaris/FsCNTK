@@ -361,12 +361,12 @@ module Layers_Recurrence =
                 name=O.name n))
 
         let out_vars = func out_forward_vars x
-        let out_actual = out_vars |> List.map (fun v -> L.delay(v,None,time_step,""))
+        let out_actual = List.zip out_vars states |> List.map (fun (v,s) -> L.delay(v,Some s,time_step,""))
 
-        let o1 = out_vars.[0].Func
+        let owner = List.head out_actual
 
         List.zip out_forward_vars out_actual
-        |> List.iter (fun (fw,ac) -> o1.ReplacePlaceholders(idict[fw.Var,ac.Var]) |> ignore )
+        |> List.iter (fun (fw,ac) -> owner.Func.ReplacePlaceholders(idict[fw.Var,ac.Var]) |> ignore )
 
         out_vars
 
@@ -401,12 +401,25 @@ module Layers_Recurrence =
         let initial_states = 
           match initial_states with
           | None -> state_shapes |> List.map (fun s -> 
-            Node.Variable
+            new Variable
               (
-                s,
-                kind=VariableKind.Placeholder, 
-                dynamicAxes=(x.Var.DynamicAxes |> Seq.toList)
-              ))
+                  !-- s,
+                  VariableKind.Constant,
+                  dataType,
+                  new NDArrayView(dataType, !-- s, device),
+                  x.Var.NeedsGradient,
+                  axisVector x.Var.DynamicAxes,
+                  x.Var.IsSparse,
+                  "",
+                  ""
+              )
+            |> V)
+            //Node.Variable
+            //  (
+            //    s,
+            //    kind=VariableKind.Constant, 
+            //    dynamicAxes=(x.Var.DynamicAxes |> Seq.toList)
+            //  ))
           | Some rs -> rs
       
         let recurrence_from = L.RecurrenceFrom(step_function,go_backwards=go_backwards,name=name)

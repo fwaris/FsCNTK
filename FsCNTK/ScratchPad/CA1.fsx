@@ -42,7 +42,7 @@ let inputSz = O.shape inp |> dims |> List.sum
 let ouputSz = O.shape outp |> dims |> List.sum
 
 let records = dataFile |> File.ReadAllLines |> Seq.length
-let trainSz = float records * 0.70 |> int
+let trainSz = float records * 0.50 |> int
 let testSz = records - trainSz
 
 let data = 
@@ -52,7 +52,7 @@ let data =
     |> Seq.map (fun s->s.Split([|'\t'|]) |> Array.filter (fun x->System.String.IsNullOrWhiteSpace x |> not))
     |> Seq.map (Seq.map float32>>Seq.toArray)
     |> Seq.toArray
-  Array.shuffle d
+  //Array.shuffle d
   d
 
 let testData = data |> Array.take trainSz

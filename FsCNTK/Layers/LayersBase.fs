@@ -57,7 +57,7 @@ type L =
       C.Splice(varVector shifted, axis)
 
   static member Activation actType (n:Node) =
-      if !Layers.trace then printfn ">> Activation"
+      if !Layers.trace then printfn ">> Activation %A" actType
       Layers.addActivation n actType
         
   static member Embedding
@@ -79,5 +79,10 @@ type L =
         | Some w, Some _    -> failwith "Embedding: output shape must not be specified when weights are given"
         | Some w, None         -> new Constant(w,name) :> Variable |> V
         | None, Some shp ->  Node.Parm(O.shape x + shp, init, name)
+      if !Layers.trace then printfn ">> Embedding %A" (O.shape E)
       x * E
       
+  static member Label name =
+    fun (x:Node) -> 
+      if !Layers.trace then printfn ">> Label %A" (O.shape x)
+      C.Alias(x.Var,name) |> F

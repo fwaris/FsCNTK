@@ -6,7 +6,7 @@ type C = CNTKLib
 
 module FsBase =
   //let device = DeviceDescriptor.UseDefaultDevice()
-  let device = DeviceDescriptor.GPUDevice(0) //should be configurable
+  let mutable device = DeviceDescriptor.GPUDevice(0) //should be configurable
   let dataType = DataType.Float
 
   let parmVector (ps:Parameter seq) = 
@@ -43,6 +43,14 @@ module FsBase =
       let vs = new AxisVector(Seq.length is)
       is |>  Seq.iter vs.Add
       vs
+
+  let schedule (ls : (int*float) seq) epochSize =
+    ls 
+    |> Seq.map (fun (n,r) ->  new PairSizeTDouble(uint32 n,r))
+    |> ResizeArray
+    |> (fun x -> new VectorPairSizeTDouble(x))
+    |> (fun x  -> new TrainingParameterScheduleDouble(x, uint32 epochSize))
+
 
   let create_shape (dims:int seq) = NDShape.CreateNDShape dims
 
@@ -187,16 +195,22 @@ module FsBase =
 
     let slice axis beginIndex endIndex (x:Node) = C.Slice (x.Var, axis, intVector beginIndex, intVector endIndex) |> F
 
+    let combine (nodes:Node seq) = C.Combine(nodes |> Seq.map (fun n->n.Var) |> varVector) |> F
+
     let sigmod (n:Node) = C.Sigmoid(n.Var) |> F
 
     let softplus (n:Node) = C.Softplus(n.Var) |> F
 
     let squared_error (prediction:Node, targets:Node) = C.SquaredError(prediction.Var,targets.Var) |> F
 
+    let cross_entropy_with_softmax(z:Node,labels:Node) = C.CrossEntropyWithSoftmax(z.Var,labels.Var) |> F
+
+    let classification_error(z:Node,labels:Node) = C.ClassificationError(z.Var,labels.Var) |> F
+
     ///swaps multiplication order to match Python API
     let times (l:Node, r:Node, name:string) = C.Times(r.Var,l.Var,name) |> F 
     let times2 (l:Node, r:Node, output_rank, infer_input_rank_to_map, name:string) = 
-      C.Times(r.Var, l.Var ,uint32 output_rank,infer_input_rank_to_map, name )
+      C.Times(r.Var, l.Var ,uint32 output_rank,infer_input_rank_to_map, name ) |> F
 
   type Node with 
     static member ( ./ ) (n:Node,d:float) = C.ElementDivide(n.Var, scalar d) |> F
