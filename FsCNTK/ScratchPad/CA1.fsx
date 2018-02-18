@@ -15,11 +15,10 @@ type CNTKLib = C
 let inp = Node.Variable(D 58, dynamicAxes=[Axis.DefaultBatchAxis()]) 
 let outp = Node.Variable(D 11, dynamicAxes=[Axis.DefaultBatchAxis()])
 
-let model (inp:Node) = 
-  let dim = 3
-  let l1 = L.Dense(D dim,activation=Activation.Tanh) >> L.Dropout(dropout_rate=0.25) 
-  let skipL =  L.Dense(D dim, activation=Activation.SELU) 
-  ((inp |> l1 |> skipL) + (l1 inp)) |> L.Dense(D 11)
+let model = 
+  L.Dense(D 20,activation=Activation.Tanh) 
+  >> L.Dropout(dropout_rate=0.25) 
+  >> L.Dense(D 11)
 
 
 let pred = model inp

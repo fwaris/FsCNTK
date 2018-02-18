@@ -47,7 +47,14 @@ open System.IO
 //    )    
 
 //#r @"..\..\packages\CNTK.GPU.2.4.0\lib\net45\x64\Cntk.Core.Managed-2.4.dll"
-#r @"D:\Repos\cntk\x64\Debug\Cntk.Core.Managed-2.4d.dll"
+
+//for debugging from source
+//debug output folder should be on path
+//#r @"D:\Repos\cntk\x64\Debug\Cntk.Core.Managed-2.4d.dll"
+
+//for release source build
+//release output folder should be on path
+#r @"D:\Repos\cntk\x64\Release\Cntk.Core.Managed-2.4.dll"
 
 #load "..\ImageUtils.fs"
 #load "..\Probability.fs"

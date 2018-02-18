@@ -51,6 +51,7 @@ module FsBase =
     |> (fun x -> new VectorPairSizeTDouble(x))
     |> (fun x  -> new TrainingParameterScheduleDouble(x, uint32 epochSize))
 
+  let constSchedule (f:float) = new TrainingParameterScheduleDouble(f)
 
   let create_shape (dims:int seq) = NDShape.CreateNDShape dims
 
@@ -115,7 +116,7 @@ module FsBase =
     | P of Parameter
     with 
 
-      member x.Var = match x with V v -> v | F f -> !> f | P p -> !> p.ToFunction()
+      member x.Var = match x with V v -> v | F f -> !> f | P p -> p :> Variable
       member x.Func = match x with V v -> v.ToFunction() | F f -> f | P p -> p.ToFunction()
 
       static member Variable (shape,?kind,?value,?needsGradient,?dynamicAxes,?isSparse,?name,?uid) =
