@@ -15,11 +15,10 @@ type CNTKLib = C
 let inp = Node.Variable(D 58, dynamicAxes=[Axis.DefaultBatchAxis()]) 
 let outp = Node.Variable(D 11, dynamicAxes=[Axis.DefaultBatchAxis()])
 
-let model (inp:Node) = 
-  let dim = 3
-  let l1 = L.Dense(D dim,activation=Activation.Tanh) >> L.Dropout(dropout_rate=0.25) 
-  let skipL =  L.Dense(D dim, activation=Activation.SELU) 
-  ((inp |> l1 |> skipL) + (l1 inp)) |> L.Dense(D 11)
+let model = 
+  L.Dense(D 5,activation=Activation.Tanh) 
+  >> L.Dropout(dropout_rate=0.25) 
+  >> L.Dense(D 11)
 
 
 let pred = model inp
@@ -27,7 +26,7 @@ let pred = model inp
 let loss = O.squared_error(pred,outp)
 
 let lr = 0.0002
-let momentum = 0.5 //equivalent to beta1
+let momentum = 0.9 //equivalent to beta1
 
 let learner = C.AdamLearner(
                     O.parms pred |> parmVector,
@@ -55,8 +54,10 @@ let data =
   //Array.shuffle d
   d
 
-let testData = data |> Array.take trainSz
-let trainData = data |> Array.skip trainSz
+let trainData = data |> Array.take trainSz
+let testData = data |> Array.skip trainSz
+
+Array.shuffle trainData
 
 let X_train = trainData |> Array.map (Array.take inputSz) 
 let Y_train = trainData |> Array.map (Array.skip inputSz) 
@@ -237,8 +238,8 @@ let model =
 
    (*
 train()
-test()
 eval()
+test()
 *)
 
 
