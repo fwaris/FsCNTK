@@ -14,6 +14,15 @@ open System.IO
 
 type C = CNTKLib
 
+let asSpaseSequence (var:Variable) (v:Value) = 
+      let mutable len = 0
+      let mutable colStarts = ResizeArray[] :> System.Collections.Generic.IList<int>
+      let mutable rowIndices = ResizeArray[] :> System.Collections.Generic.IList<int>
+      let mutable nonZeroValues = ResizeArray[] :> System.Collections.Generic.IList<float32>
+      let mutable numNonZeroValues = 0
+      v.GetSparseData(var,&len,&colStarts,&rowIndices,&nonZeroValues,&numNonZeroValues)
+      Value.CreateSequence(var.Shape,len,colStarts |> Seq.toArray,rowIndices |> Seq.toArray,nonZeroValues |> Seq.toArray,device)
+
 let imageSize = 28 * 28
 let numClasses = 10
 

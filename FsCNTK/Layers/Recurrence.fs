@@ -47,8 +47,8 @@ module Layers_Recurrence =
       let out =
         if time_step > 0 then
           C.PastValue(x.Var, initial_state,uint32 time_step,name) 
-        elif time_step = 0 then
-          C.FutureValue(x.Var,initial_state,uint32 time_step,name)
+        elif time_step < 0 then
+          C.FutureValue(x.Var,initial_state,uint32 -time_step,name)
         else
           if name="" then
             x.Func
@@ -58,7 +58,6 @@ module Layers_Recurrence =
         
 
     static member Delay(?initial_state:Node, ?time_step, ?name) =
-      //let initial_state = match initial_state with Some (v:Node) -> v.Var | None -> (scalar 0.0) :> Variable
       let time_step = defaultArg time_step 1
       let name = defaultArg name ""
       fun (x:Node) -> L.delay (x,initial_state,time_step,name)
@@ -346,7 +345,7 @@ module Layers_Recurrence =
 
       fun  states (x:Node) ->
 
-        let time_step = if go_backwards then -1 else 1
+        let time_step = if go_backwards then +1 else -1
 
         if state_shapes.Length <> List.length states then failwith "number of states should match step function"
 
@@ -360,69 +359,43 @@ module Layers_Recurrence =
                 dynamicAxes=(x.Var.DynamicAxes |> Seq.toList),
                 name=O.name n))
 
+
         let out_vars = func out_forward_vars x
         let out_actual = List.zip out_vars states |> List.map (fun (v,s) -> L.delay(v,Some s,time_step,""))
 
-        let owner = List.head out_actual
-
-        List.zip out_forward_vars out_actual
-        |> List.iter (fun (fw,ac) -> owner.Func.ReplacePlaceholders(idict[fw.Var,ac.Var]) |> ignore )
+        //rewire to make recurrence loop and remove placeholder variables
+        let out_vars = 
+          List.zip out_forward_vars out_actual
+          |> List.map (fun (fw,ac) -> 
+            ac.Func.ReplacePlaceholders(idict[fw.Var,ac.Var]) |> F )
 
         out_vars
-
-
-        //let prev_out_vars =  
-        //  List.zip states out_forward_vars 
-        //  |> List.map (fun (s,ps) -> L.delay(ps,Some s,time_step,name))
-
-        //let states' = func prev_out_vars x
-
-        //let l1 = states'.[0].Func 
-
-        //let states' = 
-        //  List.zip states' prev_out_vars 
-        //  |> List.map (fun (s',prevS) -> l1.ReplacePlaceholders(idict[prevS.Var,s'.Var]) |> F)
-
-        //states' 
 
     static member Recurrence
       (
        step_function:StepFunction, 
        ?go_backwards,
        ?initial_states,
+       ?init_value,     
        ?name
       )                            
       =
+      match initial_states,init_value with
+      | Some _, Some _ -> failwithf "Recurrence: both inital_states and inital_value should not be specified together"
+      | _,_            -> ()
+
       fun (x:Node) -> 
         let go_backwards = defaultArg  go_backwards true
         let name = defaultArg name ""
         let state_shapes,_ = step_function
 
+        let init_value = defaultArg init_value 0.0
         let initial_states = 
           match initial_states with
-          | None -> state_shapes |> List.map (fun s -> 
-            new Variable
-              (
-                  !-- s,
-                  VariableKind.Constant,
-                  dataType,
-                  new NDArrayView(dataType, !-- s, device),
-                  x.Var.NeedsGradient,
-                  axisVector x.Var.DynamicAxes,
-                  x.Var.IsSparse,
-                  "",
-                  ""
-              )
-            |> V)
-            //Node.Variable
-            //  (
-            //    s,
-            //    kind=VariableKind.Constant, 
-            //    dynamicAxes=(x.Var.DynamicAxes |> Seq.toList)
-            //  ))
+          | None -> state_shapes |> List.map (fun s ->  new Constant(!--s, dataType, init_value) :> Variable |> V )
           | Some rs -> rs
       
         let recurrence_from = L.RecurrenceFrom(step_function,go_backwards=go_backwards,name=name)
 
-        if !Layers.trace then printfn ">> Recurrence with %A" initial_states
+        if !Layers.trace then printfn ">> Recurrence with %A" (initial_states |> List.map (O.shape>>dims))
         recurrence_from initial_states x

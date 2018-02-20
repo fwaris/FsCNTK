@@ -32,7 +32,7 @@ module Layers =
   let internal addActivation (n:Node) = function
       | Activation.NONE        ->              n
       | Activation.ReLU        -> C.ReLU       n.Var   |> F
-      | Activation.LeakyReLU c -> C.LeakyReLU(n.Var, (match c with None-> 0.3f | Some c ->float32 c))   |> F
+      | Activation.LeakyReLU c -> C.LeakyReLU(n.Var, (*float32*) (match c with None->  0.3 | Some c ->  c))   |> F
       | Activation.Sigmoid     -> C.Sigmoid    n.Var   |> F
       | Activation.Tanh        -> C.Tanh       n.Var   |> F
       | Activation.SELU        -> C.SELU       n.Var   |> F
@@ -79,8 +79,9 @@ type L =
         | Some w, Some _    -> failwith "Embedding: output shape must not be specified when weights are given"
         | Some w, None         -> new Constant(w,name) :> Variable |> V
         | None, Some shp ->  Node.Parm(O.shape x + shp, init, name)
-      if !Layers.trace then printfn ">> Embedding %A" (O.shape E)
-      x * E
+      let r = x * E
+      if !Layers.trace then printfn ">> Embedding %A" (O.shape r)
+      r
       
   static member Label name =
     fun (x:Node) -> 
