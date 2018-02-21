@@ -9,31 +9,24 @@ open System.IO
 open FsCNTK.FsBase
 open System.Collections.Generic
 open Probability
+open System.Xml.Xsl
 
 type CNTKLib = C
 
 let inp = Node.Variable(D 58, dynamicAxes=[Axis.DefaultBatchAxis()]) 
 let outp = Node.Variable(D 11, dynamicAxes=[Axis.DefaultBatchAxis()])
+let outp3 = Node.Variable(D 3, dynamicAxes=[Axis.DefaultBatchAxis()])
 
 let model = 
-  L.Dense(D 20,activation=Activation.Tanh) 
-  >> L.Dropout(dropout_rate=0.25) 
+  L.Dense(D 11,activation=Activation.ELU)
+  >> L.Dropout(dropout_rate=0.3)
+  >> L.Dense(D 11, activation=Activation.ELU)
   >> L.Dense(D 11)
 
-
-let pred = model inp
-
-let loss = O.squared_error(pred,outp)
-
-let lr = 0.0002
-let momentum = 0.5 //equivalent to beta1
-
-let learner = C.AdamLearner(
-                    O.parms pred |> parmVector,
-                    new TrainingParameterScheduleDouble(lr,1u),
-                    new TrainingParameterScheduleDouble(momentum))
-
-let trainer = C.CreateTrainer(pred.Func,loss.Func,null,lrnVector [learner])
+let model3 = 
+  L.Dense(D 11,activation=Activation.ELU)
+  >> L.Dropout(dropout_rate=0.3)
+  >> L.Dense(D 3)
 
 let dataFile = "D:\gm\ca1.txt"
 
@@ -54,26 +47,44 @@ let data =
   //Array.shuffle d
   d
 
-let testData = data |> Array.take trainSz
-let trainData = data |> Array.skip trainSz
+let trainData = data |> Array.take trainSz
+let testData = data |> Array.skip trainSz
 
 let X_train = trainData |> Array.map (Array.take inputSz) 
 let Y_train = trainData |> Array.map (Array.skip inputSz) 
+let Y_train3 = trainData |> Array.map (fun xs->xs.[inputSz+1..inputSz+3]) 
 let X_test  = testData |> Array.map (Array.take inputSz)
 let Y_test  = testData |> Array.map (Array.skip inputSz)
+let Y_test3  = testData |> Array.map (fun xs->xs.[inputSz+1..inputSz+3]) 
 
 let X_trainBatch = Value.CreateBatch(!-- (O.shape inp), X_train |> Array.collect yourself, device)
 let Y_trainBatch = Value.CreateBatch(!-- (O.shape outp), Y_train |> Array.collect yourself, device)
+let Y_trainBatch3 = Value.CreateBatch(!-- (O.shape outp3), Y_train3 |> Array.collect yourself, device)
 let X_testBatch  = Value.CreateBatch(!-- (O.shape inp), X_test |> Array.collect yourself, device)
 let Y_testBatch  = Value.CreateBatch(!-- (O.shape outp), Y_test |> Array.collect yourself, device)
+let Y_testBatch3  = Value.CreateBatch(!-- (O.shape outp3), Y_test3 |> Array.collect yourself, device)
 
-let train() =
-  for i in 0..300000 do
+let train()=
+  let pred = model inp
+  let loss = O.squared_error(pred,outp)
+  let lr = 0.0001
+  let momentum = 0.75 //equivalent to beta1
+
+  let learner = C.AdamLearner(
+                      O.parms pred |> parmVector,
+                      new TrainingParameterScheduleDouble(lr,1u),
+                      new TrainingParameterScheduleDouble(momentum))
+
+  let trainer = C.CreateTrainer(pred.Func,loss.Func,null,lrnVector [learner])
+
+  for i in 0..100000 do
       let inputs = idict [inp.Var, X_trainBatch; outp.Var, Y_trainBatch]
       let r = trainer.TrainMinibatch(inputs,false,device)
       if i%1000 = 0 then printfn "%d %A" i (trainer.PreviousMinibatchLossAverage())
 
-let test() =
+  pred
+
+let test (pred:Node) =
   let inputs = new UnorderedMapVariableMinibatchData()
   inputs.Add(inp.Var,new MinibatchData(X_testBatch))
   inputs.Add(outp.Var,new MinibatchData(Y_testBatch))
@@ -81,23 +92,63 @@ let test() =
   let r = eval.TestMinibatch(inputs)
   printfn "%A" r
 
-let eval() =
-  let eInp = idict [pred.Func.Arguments.[0],X_testBatch]
+let train3()=
+  let pred = model3 inp
+  let loss = O.squared_error(pred,outp3)
+  let lr = 0.0002
+  let momentum = 0.5 //equivalent to beta1
+
+  let learner = C.AdamLearner(
+                      O.parms pred |> parmVector,
+                      new TrainingParameterScheduleDouble(lr,1u),
+                      new TrainingParameterScheduleDouble(momentum))
+
+  let trainer = C.CreateTrainer(pred.Func,loss.Func,null,lrnVector [learner])
+
+  for i in 0..100000 do
+      let inputs = idict [inp.Var, X_trainBatch; outp3.Var, Y_trainBatch3]
+      let r = trainer.TrainMinibatch(inputs,false,device)
+      if i%1000 = 0 then printfn "%d %A" i (trainer.PreviousMinibatchLossAverage())
+
+  pred
+
+let test3 (pred:Node) =
+  let inputs = new UnorderedMapVariableMinibatchData()
+  inputs.Add(inp.Var,new MinibatchData(X_testBatch))
+  inputs.Add(outp.Var,new MinibatchData(Y_testBatch3))
+  let eval = C.CreateEvaluator(pred.Func)
+  let r = eval.TestMinibatch(inputs)
+  printfn "%A" r
+
+let eval (pred:Node)  xTest yTest (outVar:Node) =
+  let eInp = idict [pred.Func.Arguments.[0],xTest]
   let eOutp = idict [pred.Func.Outputs.[0],(null:Value)]
   pred.Func.Evaluate(eInp,eOutp,device)
   let ePreds = eOutp.[pred.Func.Outputs.[0]]
-  let y' = ePreds.GetDenseData<float32>(outp.Var) |> Seq.map Seq.toArray |> Seq.toArray
-  let y  = Y_test |> Seq.chunkBySize 11 |> Seq.toArray
+  let y' = ePreds.GetDenseData<float32>(outVar.Var) |> Seq.map Seq.toArray |> Seq.toArray
+  let outputSize = outVar |> O.shape |> dims |> List.head
+  let y  = yTest |> Seq.chunkBySize outputSize |> Seq.toArray
   let yy = Array.zip y' (Array.collect yourself y)
-  let fileData = yy |> Array.map (fun (a,b) -> let l=Array.zip a b |> Array.map (fun (a,b) -> sprintf "%f\t%f" a b) in System.String.Join("\t",l))
-  do File.WriteAllLines(@"D:\gm\caOut.txt", fileData)
+  //let fileData = yy |> Array.map (fun (a,b) -> let l=Array.zip a b |> Array.map (fun (a,b) -> sprintf "%f\t%f" a b) in System.String.Join("\t",l))
+  //do File.WriteAllLines(@"D:\gm\caOut.txt", fileData)
   let sz = y'.[0].Length
   let rms = Array.create sz 0.f 
   let sumSqrs =
     (rms,yy) 
     ||> Array.fold (fun acc (a,b) -> Array.zip a b |> Array.iteri(fun i (a,b) -> acc.[i] <-  acc.[i] + (a-b)*(a-b)); acc)
   let rmse = sumSqrs |> Array.map (fun x -> x / float32 Y_test.Length) |> Array.map sqrt 
+  printf "sum rmse = %f" (Array.sum rmse)
   rmse
+
+let tr1() =
+  let p = train ()
+  test p
+  eval p X_testBatch Y_test outp
+
+let tr3() =
+  let p = train3 ()
+  test3 p
+  eval p X_testBatch Y_test3 outp3
 
 // Original
 //43.35856
@@ -111,12 +162,13 @@ let eval() =
 //21.65183
 //17.47792
 //10.53239
+//total=256.08911
 
 //RBF
 //28
 //20
 //16.3
-//11.9
+//11.9  //48.2
 //19.4
 //23.2
 //22
@@ -124,6 +176,7 @@ let eval() =
 //12.5
 //12.4
 //8.4
+//total=193
 
 (*
 let model = 
@@ -224,20 +277,57 @@ let model (inp:Node) =
     42.5674057f; 44.7219543f; 36.5981293f; 20.6601696f; 15.1724834f;
     11.1061411f|]
 
-****
 let model = 
   L.Dense(D 6,activation=Activation.Tanh) 
   >> L.Dropout(dropout_rate=0.25) 
   >> L.Dense(D 11)
+  100000
   [|27.1436443f; 19.9475689f; 17.6807957f; 13.7557793f; 17.3315163f;
     19.5633659f; 19.8775024f; 18.1389008f; 12.0414429f; 12.3985281f;
     9.01100922f|]
+
+
+let model = 
+  L.Dense(D 8,activation=Activation.ELU)
+  >> L.Dropout(dropout_rate=0.3)
+  >> L.Dense(D 10, activation=Activation.ELU)
+  >> L.Dense(D 11)
+sum rmse = 199.307000val it : float32 [] =
+let lr = 0.0001
+let momentum = 0.5 //equivalent to beta1
+  [|28.3114338f; 19.759903f; 18.4976177f; 14.6517162f; 21.1081409f;
+    21.3608532f; 25.1806679f; 20.309761f; 9.36526775f; 12.3176203f;
+    8.44403648f|]
+let model = 
+  L.Dense(D 20,activation=Activation.Tanh) 
+  >> L.Dropout(dropout_rate=0.50) 
+  >> L.Dense(D 20, Activation.Tanh)
+  >> L.Dense(D 11)
+  100000
+let lr = 0.0001
+let momentum = 0.75 //equivalent to beta1
+sum rmse = 185.170700val it : float32 [] =
+  [|27.6208134f; 22.0640106f; 21.7823696f; 14.4801817f; 16.5695457f;
+    16.5793419f; 18.836853f; 16.7149639f; 9.67801094f; 12.3621511f; 8.4824791f|]
+****
+
+let model = 
+  L.Dense(D 11,activation=Activation.ELU)
+  >> L.Dropout(dropout_rate=0.3)
+  >> L.Dense(D 11, activation=Activation.ELU)
+  >> L.Dense(D 11)
+sum rmse = 185.170700val it : float32 [] =
+  [|27.6208134f; 22.0640106f; 21.7823696f; 14.4801817f; 16.5695457f;
+    16.5793419f; 18.836853f; 16.7149639f; 9.67801094f; 12.3621511f; 8.4824791f|]
+100000
+let lr = 0.0001
+let momentum = 0.75 //equivalent to beta1
    *)
 
    (*
 train()
-test()
 eval()
+test()
 *)
-
+tr3()
 
