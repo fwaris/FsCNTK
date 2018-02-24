@@ -119,15 +119,17 @@ module FsBase =
       member x.Var = match x with V v -> v | F f -> !> f | P p -> p :> Variable
       member x.Func = match x with V v -> v.ToFunction() | F f -> f | P p -> p.ToFunction()
 
-      static member Variable (shape,?kind,?value,?needsGradient,?dynamicAxes,?isSparse,?name,?uid) =
+      //probably not a good idea to use this directly
+      //should use specfic helper methods
+      static member private Variable (shape,?kind,?value,?needsGradient,?dynamicAxes,?isSparse,?name,?uid) =
 
-        let kind          = defaultArg kind VariableKind.Input        
+        let kind          = defaultArg kind VariableKind.Input
         let value         = defaultArg value null
-        let needsGradient = defaultArg needsGradient true
+        let needsGradient = defaultArg needsGradient (kind=VariableKind.Input |> not)
         let dynamicAxes   = defaultArg dynamicAxes []
         let isSparse      = defaultArg isSparse false
         let name          = defaultArg name ""
-        let uid           = defaultArg uid  ""
+        let uid           = defaultArg uid  (sprintf "%A%d" kind (System.DateTime.Now.ToFileTime()))
 
         let v             = new Variable(
                                   !-- shape,
@@ -139,6 +141,26 @@ module FsBase =
                                   isSparse,
                                   name,
                                   uid)
+        V v
+
+      static member Input (shape,?dynamicAxes,?isSparse,?needsGradient,?name) =
+
+        let dynamicAxes   = defaultArg dynamicAxes []
+        let isSparse      = defaultArg isSparse false
+        let name          = defaultArg name ""
+        let needsGradient = defaultArg needsGradient false
+
+        let v             = Variable.InputVariable(
+                                !-- shape,
+                                dataType,
+                                name,
+                                ResizeArray dynamicAxes,
+                                isSparse,
+                                needsGradient)
+        V v
+
+      static member Placeholder(shape,dynamicAxes:Axis seq) =
+        let v = Variable.PlaceholderVariable(!-- shape, ResizeArray(dynamicAxes))
         V v
                     
       static member Parm (shape,?init,?name) =
@@ -195,6 +217,8 @@ module FsBase =
     let log (x:Node) = C.Log(x.Var) |> F
 
     let slice axis beginIndex endIndex (x:Node) = C.Slice (x.Var, axis, intVector beginIndex, intVector endIndex) |> F
+
+    let last (n:Node) = C.SequenceLast(n.Var) |> F
 
     let combine (nodes:Node seq) = C.Combine(nodes |> Seq.map (fun n->n.Var) |> varVector) |> F
 

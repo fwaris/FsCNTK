@@ -43,7 +43,7 @@ let streamConfigurations =
         [
             new StreamConfiguration(sQuery, vocab_size, true)    
             new StreamConfiguration(sIntent, num_intents,true)
-            new StreamConfiguration(sLabels,num_labels,true)
+            new StreamConfiguration(sLabels, num_labels,true)
         ]
         )
 
@@ -71,7 +71,7 @@ let create_criterion_function z y =
   ce,err
 
 //query sequence
-let x = Node.Variable
+let x = Node.Input
           (
             D vocab_size, 
             dynamicAxes = [Axis.DefaultDynamicAxis(); Axis.DefaultBatchAxis()], //Sequence due to dynamic axis
@@ -79,7 +79,7 @@ let x = Node.Variable
           )
 
 //label sequence
-let y = Node.Variable
+let y = Node.Input
           (
             D num_labels, 
             dynamicAxes = [Axis.DefaultDynamicAxis(); Axis.DefaultBatchAxis()], 
@@ -118,10 +118,13 @@ let train (reader:MinibatchSource) model_func max_epochs task =
   let minibatch_size = 70
 
   let lr_per_sample = [for _ in 1..4 -> 1,3e-4] @ [1,1.5e-4]
-  let lr_per_minibatch = lr_per_sample |> List.map (fun (i,r) -> i, r * float epoch_size)
+  let lr_per_minibatch = lr_per_sample |> List.map (fun (i,r) -> i, r * float minibatch_size)
   let lr_schedule = schedule lr_per_minibatch epoch_size
 
   let momentums = schedule [1,0.9048374180359595] minibatch_size 
+  let m = C.MomentumAsTimeConstantSchedule(new DoubleVector(ResizeArray[0.9048374180359595]),uint32 max_epochs)
+  //let m = C.MomentumAsTimeConstantSchedule(momentums)
+  //let m = C.MomentumAsTimeConstantSchedule(0.9048374180359595)
 
 
   let options = new AdditionalLearningOptions()
@@ -130,7 +133,7 @@ let train (reader:MinibatchSource) model_func max_epochs task =
   let learner = C.AdamLearner(
                       O.parms model |> parmVector ,
                       lr_schedule,
-                      momentums,
+                      m,
                       true,                                   //should be exposed by CNTK C# API as C.DefaultUnitGainValue()
                       constSchedule 0.9999986111120757,       //from python code
                       1e-8,                                   //from python code 
@@ -163,7 +166,8 @@ let train (reader:MinibatchSource) model_func max_epochs task =
     let mbLoss = trainer.PreviousMinibatchLossAverage()
     let samplesSeen = trainer.PreviousMinibatchSampleCount()
     let acc = System.Math.Round( (1.0 - trainer.PreviousMinibatchEvaluationAverage()) * 100.0, 2)
-    printfn "Epoch: %d, Loss=%f * %d, metric=%f, Total Samples=%d" epoch mbLoss samplesSeen acc t
+    let lr = learner.LearningRate()
+    printfn "Epoch: %d, Loss=%f * %d, metric=%f, Total Samples=%d, LR=%f" epoch mbLoss samplesSeen acc t lr
     
 
     trainer.SummarizeTrainingProgress() //does not work due to that fact that
@@ -175,10 +179,11 @@ let train (reader:MinibatchSource) model_func max_epochs task =
 
 //actually does the training for the selected task
 let do_train() =
-  let z = create_model()
+  let model_func = create_model()
   let reader = create_reader (Path.Combine(folder,"atis.train.ctf")) true
-  let model = train reader z 10 current_task
-  model.Func.Save(modelFile current_task)
+  let task = current_task
+  let model = train reader model_func 100 task
+  model.Func.Save(modelFile task)
 
 
 //evaluate model for the given task
@@ -225,15 +230,16 @@ do_train()
 do_test() 
 *)
 
+(*
+save and reload to check model and loss
 
 let z = create_model() x
 let l,a = create_criterion_function z y
 let mf = @"D:\repodata\fscntk\l_fs_m.bin"
 let lf = @"D:\repodata\fscntk\l_fs_l.bin"
-l.Func.Arguments.[0].Shape
-l.Func.Arguments.[1].Shape
 z.Func.Save(mf)
 l.Func.Save(lf)
 
 let z' = Function.Load(mf,device)
 let l' = Function.Load(lf,device)
+*)

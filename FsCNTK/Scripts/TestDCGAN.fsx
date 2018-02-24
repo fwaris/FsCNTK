@@ -111,9 +111,9 @@ let cntk_samples_folder = @"D:\Repos\cntk231\cntk\Examples\Image\DataSets\MNIST"
 
 let build_graph noise_shape image_shape generator discriminiator =
   let input_dynamic_axes = [Axis.DefaultBatchAxis()]
-  let Z = Node.Variable(noise_shape,dynamicAxes=input_dynamic_axes)
+  let Z = Node.Input(noise_shape,dynamicAxes=input_dynamic_axes)
 
-  let X_real = Node.Variable(image_shape,dynamicAxes=input_dynamic_axes)
+  let X_real = Node.Input(image_shape,dynamicAxes=input_dynamic_axes)
   let X_real_scaled = X_real ./ 255.0
 
   let X_fake = generator Z

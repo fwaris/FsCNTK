@@ -67,13 +67,13 @@ let d2 =
       )
 
 let tm()=
-  let Z = Node.Variable(D g_input_dim,dynamicAxes=[Axis.DefaultBatchAxis()])
+  let Z = Node.Input(D g_input_dim,dynamicAxes=[Axis.DefaultBatchAxis()])
   let dout = d2 Z
   O.shape dout
 
 let tct()=
   let f = L.ConvolutionTranspose(Ds [3;4], 128, output_shape=Ds[482;643],pad=false)
-  let Z = Node.Variable(Ds [3;480;640],dynamicAxes=[Axis.DefaultBatchAxis()])
+  let Z = Node.Input(Ds [3;480;640],dynamicAxes=[Axis.DefaultBatchAxis()])
   let m = f Z
   O.shape m
   ()

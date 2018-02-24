@@ -9,13 +9,12 @@ open System.IO
 open FsCNTK.FsBase
 open System.Collections.Generic
 open Probability
-open System.Xml.Xsl
 
 type CNTKLib = C
 
-let inp = Node.Variable(D 58, dynamicAxes=[Axis.DefaultBatchAxis()]) 
-let outp = Node.Variable(D 11, dynamicAxes=[Axis.DefaultBatchAxis()])
-let outp3 = Node.Variable(D 3, dynamicAxes=[Axis.DefaultBatchAxis()])
+let inp = Node.Input(D 58, dynamicAxes=[Axis.DefaultBatchAxis()]) 
+let outp = Node.Input(D 11, dynamicAxes=[Axis.DefaultBatchAxis()])
+let outp3 = Node.Input(D 3, dynamicAxes=[Axis.DefaultBatchAxis()])
 
 let model = 
   L.Dense(D 11,activation=Activation.ELU)
@@ -24,8 +23,10 @@ let model =
   >> L.Dense(D 11)
 
 let model3 = 
-  L.Dense(D 11,activation=Activation.ELU)
-  >> L.Dropout(dropout_rate=0.3)
+  L.Dense(D 10,activation=Activation.NONE)
+  >> L.Dropout(dropout_rate=0.30)
+  >> L.Dense(D 9,activation=Activation.ELU)
+  >> L.Dropout(dropout_rate=0.30)
   >> L.Dense(D 3)
 
 let dataFile = "D:\gm\ca1.txt"
@@ -55,6 +56,7 @@ let Y_train = trainData |> Array.map (Array.skip inputSz)
 let Y_train3 = trainData |> Array.map (fun xs->xs.[inputSz+1..inputSz+3]) 
 let X_test  = testData |> Array.map (Array.take inputSz)
 let Y_test  = testData |> Array.map (Array.skip inputSz)
+
 let Y_test3  = testData |> Array.map (fun xs->xs.[inputSz+1..inputSz+3]) 
 
 let X_trainBatch = Value.CreateBatch(!-- (O.shape inp), X_train |> Array.collect yourself, device)
@@ -67,7 +69,7 @@ let Y_testBatch3  = Value.CreateBatch(!-- (O.shape outp3), Y_test3 |> Array.coll
 let train()=
   let pred = model inp
   let loss = O.squared_error(pred,outp)
-  let lr = 0.0001
+  let lr = 0.0005
   let momentum = 0.75 //equivalent to beta1
 
   let learner = C.AdamLearner(
@@ -77,7 +79,7 @@ let train()=
 
   let trainer = C.CreateTrainer(pred.Func,loss.Func,null,lrnVector [learner])
 
-  for i in 0..100000 do
+  for i in 0..200000 do
       let inputs = idict [inp.Var, X_trainBatch; outp.Var, Y_trainBatch]
       let r = trainer.TrainMinibatch(inputs,false,device)
       if i%1000 = 0 then printfn "%d %A" i (trainer.PreviousMinibatchLossAverage())
@@ -95,8 +97,8 @@ let test (pred:Node) =
 let train3()=
   let pred = model3 inp
   let loss = O.squared_error(pred,outp3)
-  let lr = 0.0002
-  let momentum = 0.5 //equivalent to beta1
+  let lr = 0.0005
+  let momentum = 0.75 //equivalent to beta1
 
   let learner = C.AdamLearner(
                       O.parms pred |> parmVector,
@@ -105,7 +107,7 @@ let train3()=
 
   let trainer = C.CreateTrainer(pred.Func,loss.Func,null,lrnVector [learner])
 
-  for i in 0..100000 do
+  for i in 0..300000 do
       let inputs = idict [inp.Var, X_trainBatch; outp3.Var, Y_trainBatch3]
       let r = trainer.TrainMinibatch(inputs,false,device)
       if i%1000 = 0 then printfn "%d %A" i (trainer.PreviousMinibatchLossAverage())
@@ -115,7 +117,7 @@ let train3()=
 let test3 (pred:Node) =
   let inputs = new UnorderedMapVariableMinibatchData()
   inputs.Add(inp.Var,new MinibatchData(X_testBatch))
-  inputs.Add(outp.Var,new MinibatchData(Y_testBatch3))
+  inputs.Add(outp3.Var,new MinibatchData(Y_testBatch3))
   let eval = C.CreateEvaluator(pred.Func)
   let r = eval.TestMinibatch(inputs)
   printfn "%A" r
@@ -322,6 +324,19 @@ sum rmse = 185.170700val it : float32 [] =
 100000
 let lr = 0.0001
 let momentum = 0.75 //equivalent to beta1
+
+let model3 = 
+  L.Dense(D 10,activation=Activation.NONE)
+  >> L.Dropout(dropout_rate=0.30)
+  >> L.Dense(D 9,activation=Activation.ELU)
+  >> L.Dropout(dropout_rate=0.30)
+  >> L.Dense(D 3)
+  300000
+    let lr = 0.0005
+  let momentum = 0.75 //equivalent to beta1
+
+sum rmse = 49.677290val it : float32 [] = 
+[|21.433918f; 16.3977718f; 11.8456001f|]
    *)
 
    (*
@@ -329,5 +344,6 @@ train()
 eval()
 test()
 *)
+;;
 tr3()
 

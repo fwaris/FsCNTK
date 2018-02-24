@@ -25,7 +25,7 @@ module Layers_Recurrence =
         //stabilizations
         Sdh                   : Node -> Node 
         Sdc                   : Node -> Node
-        Sct                   : Node -> Node
+        //Sct                   : Node -> Node
         Sht                   : Node -> Node
         //parameters
         b                     : Node
@@ -38,17 +38,21 @@ module Layers_Recurrence =
 
   type L with
 
-    static member private delay (x:Node,initial_state, time_step, name) =
-      let initial_state = 
-        match initial_state with 
-        | Some (v:Node) -> v.Var 
-        | None -> Node.Variable(D NDShape.InferredDimension, kind=VariableKind.Constant).Var
+    static member private delay (x:Node,initial_state:Node option, time_step, name) =
+      //let initial_state = 
+      //  match initial_state with 
+      //  | Some (v:Node) -> v.Var 
+      //  | None -> Node.Variable(D NDShape.InferredDimension, kind=VariableKind.Constant).Var
 
       let out =
         if time_step > 0 then
-          C.PastValue(x.Var, initial_state,uint32 time_step,name) 
+          match initial_state with
+          | Some v  -> C.PastValue(x.Var, v.Var,uint32 time_step,name) 
+          | None    -> C.PastValue(x.Var, uint32 time_step,name)
         elif time_step < 0 then
-          C.FutureValue(x.Var,initial_state,uint32 -time_step,name)
+          match initial_state with
+          | Some v -> C.FutureValue(x.Var,v.Var,uint32 -time_step,name)
+          | None -> C.FutureValue(x.Var,uint32 -time_step,name)
         else
           if name="" then
             x.Func
@@ -128,7 +132,7 @@ module Layers_Recurrence =
 
       let Sdh = L.Stabilizer(enable_self_stabilization=enable_self_stabilization, name="dh_stabilizer")
       let Sdc = L.Stabilizer(enable_self_stabilization=enable_self_stabilization, name="dc_stabilizer")
-      let Sct = L.Stabilizer(enable_self_stabilization=enable_self_stabilization, name="c_stabilizer")
+      //let Sct = L.Stabilizer(enable_self_stabilization=enable_self_stabilization, name="c_stabilizer") //for peepholes
       let Sht = L.Stabilizer(enable_self_stabilization=enable_self_stabilization, name="P_stabilizer")
 
       let b = Node.Parm(               cell_shape_stacked,   init=init_bias, name="b")
@@ -148,7 +152,7 @@ module Layers_Recurrence =
           cell_shape            = cell_shape
           Sdh                   = Sdh 
           Sdc                   = Sdc
-          Sct                   = Sct
+          //Sct                   = Sct
           Sht                   = Sht
           b                     = b
           W                     = W
@@ -352,13 +356,10 @@ module Layers_Recurrence =
         let out_forward_vars = 
           List.zip states state_shapes 
           |> List.map (fun (n,s) ->  
-            Node.Variable
+            Node.Placeholder
               (
                 s, 
-                kind=VariableKind.Placeholder,
-                dynamicAxes=(x.Var.DynamicAxes |> Seq.toList),
-                name=O.name n))
-
+                x.Var.DynamicAxes))
 
         let out_vars = func out_forward_vars x
         let out_actual = List.zip out_vars states |> List.map (fun (v,s) -> L.delay(v,Some s,time_step,""))

@@ -1,5 +1,4 @@
-﻿module Pgm
-//#load "..\Scripts\SetEnv.fsx"
+﻿#load "..\Scripts\SetEnv.fsx"
 open FsCNTK
 open FsCNTK.FsBase
 open FsCNTK.Layers
@@ -52,11 +51,32 @@ let _ = Function.Load(modelFile,device)
 
 let loss = O.cross_entropy_with_softmax (pred,labels)
 let lossFile = @"D:\repodata\fscntk\Examplelstm_loss_fs.bin"
-let lf = loss.Func
-let lfr = loss.Func.RootFunction
-let mf = pred.Func
 loss.Func.Save lossFile
 let _ = Function.Load(lossFile,device)
+
+let ce = O.classification_error(pred,labels)
+
+//input data streams 
+let streamConfigurations = 
+        [
+            new StreamConfiguration(featuresName, inputDim, true, "x")    
+            new StreamConfiguration(labelsName, numOutputClasses,false, "y")
+        ]
+        |> ResizeArray
+
+let dataFolder = @"D:\Repos\cntk\Tests\EndToEndTests\Text\SequenceClassification\Data"
+let trainFile = Path.Combine(dataFolder,"Train.ctf")
+
+let minibatchSource = MinibatchSource.TextFormatMinibatchSource(
+                        trainFile,
+                        streamConfigurations,
+                        MinibatchSource.InfinitelyRepeat,
+                        true)
+
+let featureStreamInfo = minibatchSource.StreamInfo(featuresName)
+let labelsStreamInfo = minibatchSource.StreamInfo(labelsName)
+
+
 
 
 //var classifierOutput = LSTMSequenceClassifierNet(features, numOutputClasses, embeddingDim, hiddenDim, cellDim, device, "classifierOutput");

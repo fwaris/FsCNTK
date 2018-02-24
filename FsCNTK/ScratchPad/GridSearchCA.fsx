@@ -1,4 +1,4 @@
-﻿
+﻿//randomized search over model structure and parameters
 #load "..\Scripts\SetEnv.fsx"
 open FsCNTK
 open FsCNTK.FsBase
@@ -16,8 +16,8 @@ type CNTKLib = C
 let dataFile = @"D:\gm\ca1.txt"
 let logFile =  @"F:\fwaris\CA1\runs.txt"
 
-let inp = Node.Variable(D 58, dynamicAxes=[Axis.DefaultBatchAxis()]) 
-let outp = Node.Variable(D 11, dynamicAxes=[Axis.DefaultBatchAxis()])
+let inp = Node.Input(D 58, dynamicAxes=[Axis.DefaultBatchAxis()]) 
+let outp = Node.Input(D 11, dynamicAxes=[Axis.DefaultBatchAxis()])
 
 let inputSz = O.shape inp |> dims |> List.sum
 let ouputSz = O.shape outp |> dims |> List.sum
