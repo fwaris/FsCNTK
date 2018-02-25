@@ -19,6 +19,13 @@ open System
 //See also this tutorial for background documentation: 
 // https://cntk.ai/pythondocs/CNTK_202_Language_Understanding.html
 
+//Note: The training results are not the same as for the Python version
+//The Python model continues to reduce loss whereas this model
+//stops reducing loss much earlier
+//Ostensibly the two models are the same in terms of the
+//number of parameters and tensors to train. 
+//The computuational graph looks ok as well but why the difference - I don't know
+
 type C = CNTKLib
 Layers.trace := true
 
@@ -60,7 +67,7 @@ let create_reader path is_training =
 //model
 let create_model() =
   L.Embedding(D emb_dim, name="embed")
-  >> L.Recurrence(L.LSTM(D hidden_dim), go_backwards=true, init_value=0.1)
+  >> L.Recurrence(L.LSTM(D hidden_dim), go_backwards=false, init_value=0.1)
   >> List.head
   >> L.Dense(D num_labels, name="classify")
 
@@ -121,8 +128,10 @@ let train (reader:MinibatchSource) model_func max_epochs task =
   let lr_per_minibatch = lr_per_sample |> List.map (fun (i,r) -> i, r * float minibatch_size)
   let lr_schedule = schedule lr_per_minibatch epoch_size
 
-  let momentums = schedule [1,0.9048374180359595] minibatch_size 
-  let m = C.MomentumAsTimeConstantSchedule(new DoubleVector(ResizeArray[0.9048374180359595]),uint32 max_epochs)
+  //let momentums = schedule [1,0.9048374180359595] minibatch_size 
+  //below seems be the correct translation of the python code
+  let m = new TrainingParameterScheduleDouble(0.9048374180359595,uint32 minibatch_size)
+  //let m = C.MomentumAsTimeConstantSchedule(new DoubleVector(ResizeArray[0.9048374180359595]),uint32 max_epochs)
   //let m = C.MomentumAsTimeConstantSchedule(momentums)
   //let m = C.MomentumAsTimeConstantSchedule(0.9048374180359595)
 
@@ -139,6 +148,11 @@ let train (reader:MinibatchSource) model_func max_epochs task =
                       1e-8,                                   //from python code 
                       false,                                  //from python code
                       options)
+
+  let learner = C.AdamLearner(
+                  O.parms model |> parmVector,
+                  lr_schedule,
+                  m)
 
   let trainer = C.CreateTrainer(
                       model.Func,
@@ -157,17 +171,27 @@ let train (reader:MinibatchSource) model_func max_epochs task =
 
   let mutable t = 0
   for epoch in 1..max_epochs do         // loop over epochs
+    let mutable avgLoss = 0.0
+    let mutable avgAcc = 0.0
+    let mutable epochSamples = 0.0
     let epoch_end = epoch * epoch_size
     while t < epoch_end do                                        // loop over minibatches on the epoch
-        let data = reader.GetNextMinibatch(uint32 minibatch_size) //get minibatch
+        let data = reader.GetNextMinibatch(uint32 minibatch_size, device) //get minibatch
         let r = trainer.TrainMinibatch(data_map data, device)     // update model with it
-        t <- t + int data.[query].numberOfSamples                 // samples so far
+        let mbSamples = float data.[query].numberOfSamples
+        t <- t + int mbSamples                                      // samples so far
+        epochSamples <- epochSamples + mbSamples
+        let mbLoss = trainer.PreviousMinibatchLossAverage()
+        let acc = System.Math.Round(trainer.PreviousMinibatchEvaluationAverage() * 100.0, 2)
+        avgLoss <- avgLoss + (mbLoss * mbSamples)
+        avgAcc <- avgAcc + (acc * mbSamples)
 
-    let mbLoss = trainer.PreviousMinibatchLossAverage()
     let samplesSeen = trainer.PreviousMinibatchSampleCount()
-    let acc = System.Math.Round( (1.0 - trainer.PreviousMinibatchEvaluationAverage()) * 100.0, 2)
+    let acc = System.Math.Round(trainer.PreviousMinibatchEvaluationAverage() * 100.0, 2)
     let lr = learner.LearningRate()
-    printfn "Epoch: %d, Loss=%f * %d, metric=%f, Total Samples=%d, LR=%f" epoch mbLoss samplesSeen acc t lr
+    let loss = avgLoss / epochSamples
+    let acc = avgAcc / epochSamples
+    printfn "Epoch: %d, Loss=%f * %d, metric=%f, Total Samples=%d, LR=%f" epoch loss (int epochSamples) acc t lr
     
 
     trainer.SummarizeTrainingProgress() //does not work due to that fact that
@@ -182,7 +206,7 @@ let do_train() =
   let model_func = create_model()
   let reader = create_reader (Path.Combine(folder,"atis.train.ctf")) true
   let task = current_task
-  let model = train reader model_func 100 task
+  let model = train reader model_func 10 task
   model.Func.Save(modelFile task)
 
 
@@ -219,10 +243,35 @@ let evaluate (reader:MinibatchSource)  task =
       let r = eval.TestMinibatch(inputs,device)
       printfn "%A" r
 
+(* comparison with python model
+let model = Function.Load(modelFile current_task, device)
+let pyModel = Function.Load(@"D:\repodata\fscntk\l_py_m.bin",device)
+let f x = x |> Seq.filter (fun (p:Parameter)->p.Uid.StartsWith("Input",StringComparison.CurrentCultureIgnoreCase)) |> Seq.toArray
+let b1  = model.Parameters() |> f
+let b2  = pyModel.Parameters() |> f
+Seq.zip (model.Parameters()) (pyModel.Parameters()) 
+|> Seq.toArray 
+|> Array.map(fun (a,b)->a.Name,a.Uid,!++ a.Shape,"##", b.Name,b.Uid, !++ b.Shape)
+
+//ordering is different among parameters between F# and python models - does is matter?
+val it : (string * string * Shape * string * string * string * Shape) [] =
+  [|("W", "Parameter109", Ds [300; 129], "##", "W", "Parameter11549",
+     Ds [300; 129]);
+    ("b", "Parameter10", Ds [1200], "##", "b", "Parameter11550", Ds [129]);
+    ("W", "Parameter11", Ds [150; 1200], "##", "b", "Parameter11100",
+     Ds [1200]);
+    ("embed", "Parameter2", Ds [943; 150], "##", "W", "Parameter11101",
+     Ds [150; 1200]);
+    ("H", "Parameter12", Ds [300; 1200], "##", "H", "Parameter11102",
+     Ds [300; 1200]);
+    ("b", "Parameter110", Ds [129], "##", "E", "Parameter11089", Ds [943; 150])|]
+*)
+
 //actually test the model
 let do_test() =
   let reader = create_reader (Path.Combine(folder,"atis.test.ctf")) false
   evaluate reader current_task
+
 
 (*
 do_train()

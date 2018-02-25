@@ -76,6 +76,38 @@ let minibatchSource = MinibatchSource.TextFormatMinibatchSource(
 let featureStreamInfo = minibatchSource.StreamInfo(featuresName)
 let labelsStreamInfo = minibatchSource.StreamInfo(labelsName)
 
+let learingRatePerSample = new TrainingParameterScheduleDouble(0.0005,1u)
+let momemtum = C.MomentumAsTimeConstantSchedule(256.0)
+let learner = Learner.MomentumSGDLearner(
+                  O.parms pred,
+                  learingRatePerSample,
+                  momemtum,
+                  true)
+
+let trainer = Trainer.CreateTrainer(
+                pred.Func,
+                loss.Func,
+                ce.Func,
+                ResizeArray[learner])
+
+let minibatchSize = 200u
+let outputFrequencyInMinibatches = 20
+let numEpochs = 100
+for e in 1 .. numEpochs do
+  let mb = minibatchSource.GetNextMinibatch(minibatchSize)
+  let args = idict 
+              [
+                features.Var,mb.[featureStreamInfo]
+                labels.Var, mb.[labelsStreamInfo]
+              ]
+  trainer.TrainMinibatch(args,device) |> ignore
+  let trainLossValue = trainer.PreviousMinibatchLossAverage();
+  let evaluationValue = trainer.PreviousMinibatchEvaluationAverage();
+  printfn "Epoch: %d CrossEntropyLoss = %f, EvaluationCriterion = %f" 
+      e trainLossValue evaluationValue
+
+
+
 
 
 

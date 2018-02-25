@@ -342,14 +342,14 @@ module Layers_Recurrence =
        ?name
       )
       =
-      let go_backwards = defaultArg  go_backwards true
+      let go_backwards = defaultArg  go_backwards false //'false' means get past value - somewhat counter intuitive but matches python
       let name = defaultArg name ""
 
       let state_shapes,func = step_function
 
       fun  states (x:Node) ->
 
-        let time_step = if go_backwards then +1 else -1
+        let time_step = if go_backwards then -1 else +1
 
         if state_shapes.Length <> List.length states then failwith "number of states should match step function"
 
@@ -386,14 +386,14 @@ module Layers_Recurrence =
       | _,_            -> ()
 
       fun (x:Node) -> 
-        let go_backwards = defaultArg  go_backwards true
+        let go_backwards = defaultArg  go_backwards false
         let name = defaultArg name ""
         let state_shapes,_ = step_function
 
         let init_value = defaultArg init_value 0.0
         let initial_states = 
           match initial_states with
-          | None -> state_shapes |> List.map (fun s ->  new Constant(!--s, dataType, init_value) :> Variable |> V )
+          | None -> state_shapes |> List.map (fun s ->  new Constant(!>[|1|], dataType, init_value) :> Variable |> V )
           | Some rs -> rs
       
         let recurrence_from = L.RecurrenceFrom(step_function,go_backwards=go_backwards,name=name)
