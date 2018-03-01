@@ -13,59 +13,23 @@ open System.Collections.Generic
 open Probability
 open System
 open FsCNTK.Layers_Recurrence
-
-type CNTKLib = C
-Layers.trace := true
-
-let inputDim = 2000
-let cellDim = 25
-let hiddenDim = 25
-let embeddingDim = 50
-let numOutputClasses = 5
-
-// build the model
-let featuresName = "features";
-let features = 
-  Node.Input
-    (
-      D inputDim, 
-      dynamicAxes=[Axis.DefaultDynamicAxis(); Axis.DefaultBatchAxis()],
-      name=featuresName,
-      isSparse=true)
-  //Variable.InputVariable(new int[] { inputDim }, DataType.Float, featuresName, null, true /*isSparse*/);
-let labelsName = "labels"
-let labels = Node.Input(D numOutputClasses, dynamicAxes=[Axis.DefaultBatchAxis()],name=labelsName,isSparse=true)
-  //Variable.InputVariable(new int[] { numOutputClasses }, DataType.Float, labelsName,
-  //  new List<Axis>() { Axis.DefaultBatchAxis() }, true);
-
-let model = 
-  L.Embedding(D embeddingDim)
-  >> L.Recurrence(L.LSTM(D hiddenDim, cell_shape=D cellDim,enable_self_stabilization=true),name="recurrence")
-  >> List.head
-  >> O.last
-  >> L.Dense(D numOutputClasses,name="classifierOutput")
-
-let pred = model features
-let modelFile = @"D:\repodata\fscntk\Examplelstm_model_fs.bin"
-pred.Func.Save(modelFile)
-let _ = Function.Load(modelFile,device)
-
-let loss = O.cross_entropy_with_softmax (pred,labels)
-let lossFile = @"D:\repodata\fscntk\Examplelstm_loss_fs.bin"
-let lf = loss.Func
-let lfr = loss.Func.RootFunction
-let mf = pred.Func
-loss.Func.Save lossFile
-let _ = Function.Load(lossFile,device)
+let m1 = Function.Load(@"D:\repodata\fscntk\l_fs_m.bin",device)
+let m2 = Function.Load(@"D:\repodata\fscntk\l_py_m.bin",device)
+let mb = m2.RootFunction.Inputs.[2].Owner
+let mbo = mb.BlockRoot()
+mbo.Save(@"D:\repodata\fscntk\mbo_m.bin")
+let _ = Function.Load(@"D:\repodata\fscntk\mbo_m.bin",device)
+(*
+- function has arguments and inputs
+- inputs are nodes from outside the function
+- for graph root, input are prob. just parameters and constants
+- for graph root, 'rootfunction' holds outpur var
+  and points to other input nodes
+- root function will point to itself for non root nodes?
+- inputs are parameters, constants or output variables 
+- output vars have owners which are functions
+*)
 
 
-//var classifierOutput = LSTMSequenceClassifierNet(features, numOutputClasses, embeddingDim, hiddenDim, cellDim, device, "classifierOutput");
-//var modelPath = Path.Combine(@"D:\repodata\fscntk", "ExampleLstm_model.bin");
-//classifierOutput.Save(modelPath);
-//var m = Function.Load(modelPath, device);
-//var inputs = classifierOutput.Inputs;
-//var parms = classifierOutput.Parameters();
-//var outps = classifierOutput.Outputs;
-
-
-
+let i = 1
+()

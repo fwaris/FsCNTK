@@ -25,11 +25,12 @@ let model =
 let model3 = 
   L.Dense(D 10,activation=Activation.NONE)
   >> L.Dropout(dropout_rate=0.30)
-  >> L.Dense(D 9,activation=Activation.ELU)
+  >> L.Dense(D 9,activation=Activation.ELU) 
   >> L.Dropout(dropout_rate=0.30)
   >> L.Dense(D 3)
 
-let dataFile = "D:\gm\ca1.txt"
+let dataFile = @"D:\gm\ca1.txt"
+let folder = @"D:\gm"
 
 let inputSz = O.shape inp |> dims |> List.sum
 let ouputSz = O.shape outp |> dims |> List.sum
@@ -69,7 +70,7 @@ let Y_testBatch3  = Value.CreateBatch(!-- (O.shape outp3), Y_test3 |> Array.coll
 let train()=
   let pred = model inp
   let loss = O.squared_error(pred,outp)
-  let lr = 0.0005
+  let lr = 0.0001
   let momentum = 0.75 //equivalent to beta1
 
   let learner = C.AdamLearner(
@@ -79,7 +80,7 @@ let train()=
 
   let trainer = C.CreateTrainer(pred.Func,loss.Func,null,lrnVector [learner])
 
-  for i in 0..200000 do
+  for i in 0..100000 do
       let inputs = idict [inp.Var, X_trainBatch; outp.Var, Y_trainBatch]
       let r = trainer.TrainMinibatch(inputs,false,device)
       if i%1000 = 0 then printfn "%d %A" i (trainer.PreviousMinibatchLossAverage())
@@ -122,7 +123,7 @@ let test3 (pred:Node) =
   let r = eval.TestMinibatch(inputs)
   printfn "%A" r
 
-let eval (pred:Node)  xTest yTest (outVar:Node) =
+let predict (pred:Node)  xTest yTest (outVar:Node) =
   let eInp = idict [pred.Func.Arguments.[0],xTest]
   let eOutp = idict [pred.Func.Outputs.[0],(null:Value)]
   pred.Func.Evaluate(eInp,eOutp,device)
@@ -131,10 +132,15 @@ let eval (pred:Node)  xTest yTest (outVar:Node) =
   let outputSize = outVar |> O.shape |> dims |> List.head
   let y  = yTest |> Seq.chunkBySize outputSize |> Seq.toArray
   let yy = Array.zip y' (Array.collect yourself y)
+  yy,outputSize
+
+let eval (pred:Node)  xTest yTest (outVar:Node) =
   //let fileData = yy |> Array.map (fun (a,b) -> let l=Array.zip a b |> Array.map (fun (a,b) -> sprintf "%f\t%f" a b) in System.String.Join("\t",l))
   //do File.WriteAllLines(@"D:\gm\caOut.txt", fileData)
-  let sz = y'.[0].Length
-  let rms = Array.create sz 0.f 
+  let yy,outputSize = predict (pred:Node)  xTest yTest (outVar:Node)
+
+  //let sz = y'.[0].Length
+  let rms = Array.create outputSize 0.f 
   let sumSqrs =
     (rms,yy) 
     ||> Array.fold (fun acc (a,b) -> Array.zip a b |> Array.iteri(fun i (a,b) -> acc.[i] <-  acc.[i] + (a-b)*(a-b)); acc)
@@ -145,12 +151,37 @@ let eval (pred:Node)  xTest yTest (outVar:Node) =
 let tr1() =
   let p = train ()
   test p
+  p.Func.Save(Path.Combine(folder,"model11.bin"))
   eval p X_testBatch Y_test outp
+
 
 let tr3() =
   let p = train3 ()
   test3 p
+  p.Func.Save(Path.Combine(folder,"model1-3.bin"))
   eval p X_testBatch Y_test3 outp3
+
+let genpred() =
+  let m1 = Function.Load(Path.Combine(folder,"model11.bin"),device) |> F
+  let m3 = Function.Load(Path.Combine(folder,"model1-3.bin"),device) |> F
+  //eval m1 X_testBatch Y_test outp
+  //eval m3 X_testBatch Y_test3 outp3
+  let p1,_ = predict m1 X_testBatch Y_test outp
+  let p3,_ = predict m3 X_testBatch Y_test3 outp3
+  let pBth = 
+    Array.zip p1 p3
+    |> Array.map (fun ((p,a),(p3,_)) -> 
+      let p' = Array.copy p
+      p'.[1] <- p3.[0]
+      p'.[2] <- p3.[1]
+      p'.[3] <- p3.[2]
+      p',a
+    )
+  let fileData = pBth |> Array.map (fun (a,b) -> let l=Array.zip a b |> Array.map (fun (a,b) -> sprintf "%f\t%f" a b) in System.String.Join("\t",l))
+  do File.WriteAllLines(@"D:\gm\caOut.txt", fileData)
+
+
+  
 
 // Original
 //43.35856
@@ -337,6 +368,22 @@ let model3 =
 
 sum rmse = 49.677290val it : float32 [] = 
 [|21.433918f; 16.3977718f; 11.8456001f|]
+
+
+
+let model = 
+  L.Dense(D 5,activation=Activation.Sigmoid)
+  >> L.Dropout(dropout_rate=0.3)
+  >> L.Dense(D 5, activation=Activation.ELU)
+  >> L.Dropout(dropout_rate=0.3)
+  >> L.Dense(D 11)
+let lr = 0.0005
+let momentum = 0.75
+sum rmse = 188.746200val it : float32 [] =
+  [|29.5637054f; 22.3561954f; 17.2810383f; 14.4075737f; 17.8964119f;
+    17.9756432f; 20.3367023f; 18.4257355f; 9.48065662f; 12.4105568f;
+    8.61199188f|]
+
    *)
 
    (*
@@ -345,5 +392,6 @@ eval()
 test()
 *)
 ;;
+//tr1()
 tr3()
 

@@ -88,10 +88,11 @@
     <None Include="ScratchPad\CA1.fsx" />
     <None Include="ScratchPad\GridSearchCA.fsx" />
     <None Include="ScratchPad\LstmSimple.fsx" />
+    <None Include="ScratchPad\Scratch.fsx" />
   </ItemGroup>
   <ItemGroup>
-    <Reference Include="Cntk.Core.Managed-2.4d">
-      <HintPath>..\..\cntk\x64\Debug\Cntk.Core.Managed-2.4d.dll</HintPath>
+    <Reference Include="Cntk.Core.Managed-2.4">
+      <HintPath>..\..\cntk\x64\Release\Cntk.Core.Managed-2.4.dll</HintPath>
     </Reference>
     <Reference Include="mscorlib" />
     <Reference Include="FSharp.Core">
