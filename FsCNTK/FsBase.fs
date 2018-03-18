@@ -222,6 +222,10 @@ module FsBase =
 
     let combine (nodes:Node seq) = C.Combine(nodes |> Seq.map (fun n->n.Var) |> varVector) |> F
 
+    let getOutput n = function 
+      | F v -> if v.Outputs.Count < n-1 then failwithf "index exceeds avaiable output variables" else v.Outputs.[n] |> V
+      | _ -> failwith "for function nodes only"
+
     let sigmod (n:Node) = C.Sigmoid(n.Var) |> F
 
     let softplus (n:Node) = C.Softplus(n.Var) |> F

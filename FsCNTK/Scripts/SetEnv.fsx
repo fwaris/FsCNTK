@@ -1,4 +1,4 @@
-﻿
+﻿//TODO use Paket for reference management
 (******** 
 Note: This code is to reference dlls and native libs in
 the CNTK nuget package. Adjust as needed for CPU or GPU versions

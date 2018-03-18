@@ -67,7 +67,7 @@ let create_reader path is_training =
 //model
 let create_model() =
   L.Embedding(D emb_dim, name="embed")
-  >> L.Recurrence(L.LSTM(D hidden_dim, enable_self_stabilization=true), go_backwards=false, init_value=0.1)
+  >> L.Recurrence(L.LSTM(D hidden_dim, enable_self_stabilization=false), go_backwards=false, init_value=0.1)
   >> List.head
   >> L.Dense(D num_labels, name="classify")
 
@@ -107,9 +107,9 @@ let modelFile = function
 //train given model
 let train (reader:MinibatchSource) model_func max_epochs task =
 
-  //let model = model_func x
-  let model = Function.Load(@"D:\repodata\fscntk\l_py_m.bin",device) |> F
-  let xVar = model.Func.Arguments.[0]
+  let model = model_func x
+  //let model = Function.Load(@"D:\repodata\fscntk\l_py_m.bin",device) |> F
+  //let xVar = model.Func.Arguments.[0]
  
 
   let loss,label_error = create_criterion_function model y
@@ -170,7 +170,7 @@ let train (reader:MinibatchSource) model_func max_epochs task =
   
   let data_map (data:UnorderedMapStreamInformationMinibatchData) = 
     match task with
-    | Slot_Tagging -> idict [xVar,data.[query]; y.Var,data.[labels]]
+    | Slot_Tagging -> idict [x.Var,data.[query]; y.Var,data.[labels]]
     | Intent       -> idict [x.Var,data.[query]; y.Var,data.[intent]]
 
   let mutable t = 0
@@ -281,13 +281,13 @@ let do_test() =
 (*
 do_train()
 
+
 do_test() 
 *)
 
 (*
 let z1 = create_model() x
 z1.Func.Save(@"D:\repodata\fscntk\m_fs_untrained.bin")
-
 
 *)
 

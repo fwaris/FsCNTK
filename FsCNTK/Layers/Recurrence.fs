@@ -199,9 +199,9 @@ module Layers_Recurrence =
         //let dcs = rp.Sdc(dc) //stabilized previous cell state only needed if peepholes are used
 
         //projected contribution from inputs(s), hidden and bias
-        let prj1 = (x * rp.W) 
-        let prj2 = (dhs * rp.H) 
-        let proj4 = rp.b + (prj1 + prj2)
+        let wProj = (x * rp.W) 
+        let hProj = (dhs * rp.H) 
+        let proj4 = (rp.b + wProj) + hProj
 
           //rp.b 
           //+  (x * rp.W) 

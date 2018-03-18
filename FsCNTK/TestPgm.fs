@@ -15,9 +15,9 @@ open System
 open FsCNTK.Layers_Recurrence
 let m1 = Function.Load(@"D:\repodata\fscntk\l_fs_m.bin",device)
 let m2 = Function.Load(@"D:\repodata\fscntk\l_py_m.bin",device)
+m2.RootFunction
 let mb = m2.RootFunction.Inputs.[2].Owner
 let mbo = mb.BlockRoot()
-mbo.Save(@"D:\repodata\fscntk\mbo_m.bin")
 let _ = Function.Load(@"D:\repodata\fscntk\mbo_m.bin",device)
 (*
 - function has arguments and inputs
