@@ -53,31 +53,9 @@ module Layers_Dense =
           let W = new Parameter(!--(input_shape + output_shape),dataType,init_weight,device,"W")
           let b = if bias then new Parameter(!--output_shape,dataType,init_bias,device,"b") else null
 
-          //python code swaps left and right parameters in its times function - don't know why
-          //here we use the cntk function 
-
           let r = C.Times(W,x.Var,uint32 output_rank, infer_input_rank_to_map)
           let r = if bias then C.Plus(!>r,  b ) else r
           let r = addActivation (F r) activation
           if !Layers.trace then printfn ">> Dense[%s] %A" name (O.shape r) 
           r
 
-          ////python uses late binding so shape is inferred
-          ////here we can just use the shape given
-          //let input_shape = O.shape x
-            
-          //let init_weight = B._initializer_with_rank (init, output_rank=output_rank) 
-          //let W = Node.Parm(input_shape + output_shape, init=init_weight,name="W") 
-          //let b = if bias then Node.Parm(output_shape,init=init_bias,name="b") |> Some else None
-
-          ////python code swaps left and right parameters in its times function - don't know why
-          ////here we use the cntk function 
-          //let r = C.Times(W.Var,x.Var,uint32 output_rank, infer_input_rank_to_map) |> F
-          ////let r = O.times2(x,W, output_rank, infer_input_rank_to_map,"")
-          //let r = match b with None -> W | Some b -> b + W
-          //let r = addActivation r activation
-
-          //if !Layers.trace then printfn ">> Dense[%s] %A" name (r|>O.shape|>dims)
-
-          //r
-      

@@ -23,38 +23,49 @@ Future nuget packages may move need packages around and so this code may become 
 open System
 open System.IO
 
-//Environment.SetEnvironmentVariable("Path",
-//    Environment.GetEnvironmentVariable("Path") + ";" + __SOURCE_DIRECTORY__)
+Environment.SetEnvironmentVariable("Path",
+    Environment.GetEnvironmentVariable("Path") + ";" + __SOURCE_DIRECTORY__)
 
-//let pkgdir =  __SOURCE_DIRECTORY__ + @"..\..\..\packages"
+let pkgdir =  __SOURCE_DIRECTORY__ + @"..\..\..\packages"
 
-//let fullPath paths = Path.GetFullPath(Path.Combine(paths))
+let fullPath paths = Path.GetFullPath(Path.Combine(paths))
 
-////change these for you installation (e.g. GPU vs CPU)
-//let dependencies = [
-//      @"CNTK.Deps.Cuda.2.4.0\support\x64\Dependency"
-//      @"CNTK.Deps.cuDNN.2.4.0\support\x64\Dependency"
-//      @"CNTK.Deps.MKL.2.4.0\support\x64\Dependency"
-//      @"CNTK.Deps.OpenCV.Zip.2.4.0\support\x64\Dependency"
-//      @"CNTK.Deps.OpenCV.Zip.2.4.0\support\x64\Dependency\Release"
-//      @"CNTK.GPU.2.4.0\support\x64\Release"
-//    ]
+//change these for you installation (e.g. GPU vs CPU)
+let dependencies = [
+      @"CNTK.Deps.Cuda.2.5.0\support\x64\Dependency"
+      @"CNTK.Deps.cuDNN.2.5.0\support\x64\Dependency"
+      @"CNTK.Deps.MKL.2.5.0\support\x64\Dependency"
+      @"CNTK.Deps.OpenCV.Zip.2.5.0\support\x64\Dependency"
+      @"CNTK.Deps.OpenCV.Zip.2.5.0\support\x64\Dependency\Release"
+      @"CNTK.GPU.2.5.0\support\x64\Release"
+    ]
 
-//dependencies 
-//|> Seq.iter (fun dep -> 
-//    Environment.SetEnvironmentVariable("Path",
-//        fullPath [|pkgdir;dep|] + ";" + Environment.GetEnvironmentVariable("Path"))
-//    )    
+dependencies 
+|> Seq.iter (fun dep -> 
+    Environment.SetEnvironmentVariable("Path",
+        fullPath [|pkgdir;dep|] + ";" + Environment.GetEnvironmentVariable("Path"))
+    )    
 
-//#r @"..\..\packages\CNTK.GPU.2.4.0\lib\net45\x64\Cntk.Core.Managed-2.4.dll"
+#r @"..\..\packages\CNTK.GPU.2.5.0\lib\net45\x64\Cntk.Core.Managed-2.5.dll"
 
 //for debugging from source
 //debug output folder should be on path
-//#r @"D:\Repos\cntk\x64\Debug\Cntk.Core.Managed-2.4d.dll"
+//#I @"D:\Repos\cntk\x64\Debug"
+//#r @"Cntk.Core.Managed-2.5d.dll"
 
 //for release source build
 //release output folder should be on path
-#r @"D:\Repos\cntk\x64\Release\Cntk.Core.Managed-2.4.dll"
+//#r @"D:\Repos\cntk\x64\Debug\Cntk.Core.Managed-2.5.dll"
+
+// Environment.GetEnvironmentVariable("Path").Split(';') |> Array.iter (printfn "%s")
+
+//charting
+#r @"..\..\packages\FSharp.Charting.0.91.1\lib\net45\FSharp.Charting.dll"
+#r "System.Windows.Forms.DataVisualization"
+open FSharp.Charting
+module FsiAutoShow = 
+    fsi.AddPrinter(fun (ch:FSharp.Charting.ChartTypes.GenericChart) -> ch.ShowChart() |> ignore; "(Chart)")
+
 
 #load "..\ImageUtils.fs"
 #load "..\Probability.fs"

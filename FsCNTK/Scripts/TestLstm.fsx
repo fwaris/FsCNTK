@@ -12,6 +12,16 @@ open System.IO
 open FsCNTK.FsBase
 open System
 
+let getValue (v:Variable) = 
+  let vv = v.GetValue()
+  let vvv = new Value(vv)
+  let vvvv = vvv.GetDenseData<float32>(v)
+  printfn "%A" v.Shape.Dimensions
+  printfn "%A" (vvvv |> Seq.map Seq.average |> Seq.average)
+  vvvv |> Seq.collect (fun x->x)
+
+
+
 //Language Understanding with Recurrent Networks
 //the code is based on the python example included with CNTK git or binary release
 //under the Examples\LanguageUnderstanding\ATIS\Python folder
@@ -81,16 +91,14 @@ let create_criterion_function z y =
 let x = Node.Input
           (
             D vocab_size, 
-            dynamicAxes = [Axis.DefaultDynamicAxis(); Axis.DefaultBatchAxis()], //Sequence due to dynamic axis
-            isSparse=true                                                       //SparseTensor
+            dynamicAxes = [Axis.DefaultDynamicAxis(); Axis.DefaultBatchAxis()] //Sequence due to dynamic axis
           )
 
 //label sequence
 let y = Node.Input
           (
             D num_labels, 
-            dynamicAxes = [Axis.DefaultDynamicAxis(); Axis.DefaultBatchAxis()], 
-            isSparse=true
+            dynamicAxes = [Axis.DefaultDynamicAxis(); Axis.DefaultBatchAxis()] 
           )
 
 //training tasks 
@@ -105,17 +113,12 @@ let modelFile = function
   | Intent -> "intent_model.bin"
 
 //train given model
-let train (reader:MinibatchSource) model_func max_epochs task =
+let train (reader:MinibatchSource) (model:Node) max_epochs task =
 
-  let model = model_func x
-  //let model = Function.Load(@"D:\repodata\fscntk\l_py_m.bin",device) |> F
-  //let xVar = model.Func.Arguments.[0]
- 
+  let xVar = model.Func.Arguments.[0]
 
   let loss,label_error = create_criterion_function model y
-
-  model.Func.Save(@"D:\repodata\fscntk\l_fs_m.bin")
-  loss.Func.Save(@"D:\repodata\fscntk\l_fs_l.bin")
+  loss.Func.Save(@"D:\repodata\fscntk\l_fs2_l.bin")
 
   let parms = O.parms model 
   let totalParms = parms |> Seq.map (fun p -> p.Shape.TotalSize) |> Seq.sum
@@ -153,10 +156,10 @@ let train (reader:MinibatchSource) model_func max_epochs task =
                       false,                                  //from python code
                       options)
 
-  let learner = C.AdamLearner(
-                  O.parms model |> parmVector,
-                  lr_schedule,
-                  m)
+  //let learner = C.AdamLearner(
+  //                O.parms model |> parmVector,
+  //                lr_schedule,
+  //                m)
 
   let trainer = C.CreateTrainer(
                       model.Func,
@@ -170,7 +173,7 @@ let train (reader:MinibatchSource) model_func max_epochs task =
   
   let data_map (data:UnorderedMapStreamInformationMinibatchData) = 
     match task with
-    | Slot_Tagging -> idict [x.Var,data.[query]; y.Var,data.[labels]]
+    | Slot_Tagging -> idict [xVar,data.[query]; y.Var,data.[labels]]
     | Intent       -> idict [x.Var,data.[query]; y.Var,data.[intent]]
 
   let mutable t = 0
@@ -207,7 +210,7 @@ let train (reader:MinibatchSource) model_func max_epochs task =
 
 //actually does the training for the selected task
 let do_train() =
-  let model_func = create_model()
+  let model_func = create_model() x
 
   let reader = create_reader (Path.Combine(folder,"atis.train.ctf")) true
   let task = current_task
@@ -304,3 +307,34 @@ l.Func.Save(lf)
 let z' = Function.Load(mf,device)
 let l' = Function.Load(lf,device)
 *)
+
+open FSharp.Charting 
+
+let stepTrain() =
+  let task = current_task
+
+  let mF = 
+    let model = Function.Load(@"D:\repodata\fscntk\l_fs2_m.bin",device) |> F
+    let reader = create_reader (Path.Combine(folder,"atis.train.ctf")) true
+    //model
+    train reader model 10 task
+
+  let mP = 
+    let model = Function.Load(@"D:\repodata\fscntk\l_py_m.bin",device) |> F
+    let reader = create_reader (Path.Combine(folder,"atis.train.ctf")) true
+    //model
+    train reader model 10 task
+
+  let sortedParms = Seq.filter (fun (p:Variable) ->p.IsParameter) >> Seq.sortBy (fun p -> p.Shape.TotalSize)
+  let printParms : Variable seq -> unit = Seq.iter(fun (p:Variable)->printfn "%s, %d, %A, %A" p.Name p.Shape.TotalSize p.Shape.Dimensions p.NeedsGradient)
+  let pF = sortedParms mF.Func.Inputs
+  let pP = sortedParms mP.Func.Inputs
+
+  printParms pF
+  printParms pP
+
+  Seq.zip pF pP 
+  |> Seq.map (fun (pf,pp) ->
+    let t = sprintf "%s %A" pf.Name pf.Shape.Dimensions
+    [pf;pp] |> List.map (getValue>>Chart.FastPoint) |> Chart.Combine |> Chart.WithTitle t)
+  |> Seq.toArray

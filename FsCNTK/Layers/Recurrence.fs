@@ -145,7 +145,7 @@ module Layers_Recurrence =
         | _   -> None
 
       {
-          stack_axis            = axisVector [new Axis(-1)] 
+          stack_axis            = axisVector [new Axis(0)] 
           stacked_dim           = cell_dim
           cell_shape_stacked    = cell_shape_stacked
           cell_shape_stacked_H  = cell_shape_stacked_H
@@ -391,12 +391,13 @@ module Layers_Recurrence =
         let state_shapes,_ = step_function
 
         let init_value = defaultArg init_value 0.0
+        let cVal = new Constant(!>[|1|], dataType, init_value) :> Variable |> V 
         let initial_states = 
           match initial_states with
-          | None -> state_shapes |> List.map (fun s ->  new Constant(!>[|1|], dataType, init_value) :> Variable |> V )
+          | None -> state_shapes |> List.map (fun _ ->  cVal )
           | Some rs -> rs
       
         let recurrence_from = L.RecurrenceFrom(step_function,go_backwards=go_backwards,name=name)
 
-        if !Layers.trace then printfn ">> Recurrence with %A" (initial_states |> List.map (O.shape>>dims))
+        if !Layers.trace then printfn ">> Recurrence with %A" (state_shapes |> List.map (dims))
         recurrence_from initial_states x
