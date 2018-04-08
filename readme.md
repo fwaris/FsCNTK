@@ -11,15 +11,12 @@ A F# functional wrapper over CNTK's .Net API
 
 
 ##### Models
-<a href="FsCNTK/Scripts/imgs/Generator_loss.Png"><img src="FsCNTK/Scripts/imgs/Generator_loss.Png" align="left" height="150"></a>
+<a href="FsCNTK/Scripts/imgs/Generator_loss.Png"><img src="FsCNTK/Scripts/imgs/Generator_loss.Png" align="left" height="150"></a>  
+<a href="FsCNTK/Scripts/imgs/Discriminator_Loss.Png"><img src="FsCNTK/Scripts/imgs/Discriminator_Loss.Png" align="left" height="150"></a>  
 
 
-<a href="FsCNTK/Scripts/imgs/Discriminator_Loss.Png"><img src="FsCNTK/Scripts/imgs/Discriminator_Loss.Png" align="left" height="150"></a>
-
-<br  />
-<br  />
 ### LSTM
 [LSTM for Language Understanding](FsCNTK/Scripts/TestLstm.fsx) - (requires GPU)
 ##### Model
-<a href="FsCNTK/Scripts/imgs/LSTM_Lang_Model.Png"><img src="FsCNTK/Scripts/imgs/LSTM_Lang_Model.Png" align="left" height="150"></a>
+<a href="FsCNTK/Scripts/imgs/LSTM_Lang_Model.Png"><img src="FsCNTK/Scripts/imgs/LSTM_Lang_Model.Png" align="left" height="150"></a>  
 
