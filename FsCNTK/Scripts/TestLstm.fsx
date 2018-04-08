@@ -20,22 +20,17 @@ let getValue (v:Variable) =
   printfn "%A" (vvvv |> Seq.map Seq.average |> Seq.average)
   vvvv |> Seq.collect (fun x->x)
 
+(*
+Language Understanding with Recurrent Networks
+the code is based on the python example included with CNTK git or binary release
+under the Examples\LanguageUnderstanding\ATIS\Python folder
 
+See also this tutorial for background documentation: 
+ https://cntk.ai/pythondocs/CNTK_202_Language_Understanding.html
 
-//Language Understanding with Recurrent Networks
-//the code is based on the python example included with CNTK git or binary release
-//under the Examples\LanguageUnderstanding\ATIS\Python folder
-//
-//See also this tutorial for background documentation: 
-// https://cntk.ai/pythondocs/CNTK_202_Language_Understanding.html
+Note: Visualization of the LSTM model is in the Scripts/imgs folder
 
-//Note: The training results are not the same as for the Python version
-//The Python model continues to reduce loss whereas this model
-//stops reducing loss much earlier
-//Ostensibly the two models are the same in terms of the
-//number of parameters and tensors to train. 
-//The computuational graph looks ok as well but why the difference - I don't know
-
+*)
 type C = CNTKLib
 Layers.trace := true
 
@@ -118,7 +113,7 @@ let train (reader:MinibatchSource) (model:Node) max_epochs task =
   let xVar = model.Func.Arguments.[0]
 
   let loss,label_error = create_criterion_function model y
-  loss.Func.Save(@"D:\repodata\fscntk\l_fs2_l.bin")
+  //loss.Func.Save(@"D:\repodata\fscntk\l_fs2_l.bin")
 
   let parms = O.parms model 
   let totalParms = parms |> Seq.map (fun p -> p.Shape.TotalSize) |> Seq.sum
@@ -135,13 +130,7 @@ let train (reader:MinibatchSource) (model:Node) max_epochs task =
   let lr_per_minibatch = lr_per_sample |> List.map (fun (i,r) -> i, r * float minibatch_size)
   let lr_schedule = schedule lr_per_minibatch epoch_size
 
-  //let momentums = schedule [1,0.9048374180359595] minibatch_size 
-  //below seems be the correct translation of the python code
-  let m = new TrainingParameterScheduleDouble(0.9048374180359595,uint32 minibatch_size)
-  //let m = C.MomentumAsTimeConstantSchedule(new DoubleVector(ResizeArray[0.9048374180359595]),uint32 max_epochs)
-  //let m = C.MomentumAsTimeConstantSchedule(momentums)
-  //let m = C.MomentumAsTimeConstantSchedule(0.9048374180359595)
-
+  let momentum = new TrainingParameterScheduleDouble(0.9048374180359595,uint32 minibatch_size)
 
   let options = new AdditionalLearningOptions()
   options.gradientClippingThresholdPerSample <- 15.0
@@ -149,17 +138,12 @@ let train (reader:MinibatchSource) (model:Node) max_epochs task =
   let learner = C.AdamLearner(
                       O.parms model |> parmVector ,
                       lr_schedule,
-                      m,
+                      momentum,
                       true,                                   //should be exposed by CNTK C# API as C.DefaultUnitGainValue()
                       constSchedule 0.9999986111120757,       //from python code
                       1e-8,                                   //from python code 
                       false,                                  //from python code
                       options)
-
-  //let learner = C.AdamLearner(
-  //                O.parms model |> parmVector,
-  //                lr_schedule,
-  //                m)
 
   let trainer = C.CreateTrainer(
                       model.Func,
@@ -174,7 +158,7 @@ let train (reader:MinibatchSource) (model:Node) max_epochs task =
   let data_map (data:UnorderedMapStreamInformationMinibatchData) = 
     match task with
     | Slot_Tagging -> idict [xVar,data.[query]; y.Var,data.[labels]]
-    | Intent       -> idict [x.Var,data.[query]; y.Var,data.[intent]]
+    | Intent       -> idict [xVar,data.[query]; y.Var,data.[intent]]
 
   let mutable t = 0
   for epoch in 1..max_epochs do         // loop over epochs
@@ -220,7 +204,7 @@ let do_train() =
 
 //evaluate model for the given task
 //the model is read from the trained model 
-//saved to file
+//saved to file, earlier
 let evaluate (reader:MinibatchSource)  task =
   let model = Function.Load(modelFile task, device)
   let loss,label_error = create_criterion_function (F model) y
@@ -234,12 +218,11 @@ let evaluate (reader:MinibatchSource)  task =
 
   let eval = C.CreateEvaluator(loss.Func)
 
-  let mutable go = true
-  while go do
+  let rec run (lossAcc, samplesAcc) =
     let minibatch_size = 500
     let data = reader.GetNextMinibatch(uint32 minibatch_size) //get minibatch
     if data.Count = 0 then
-      go <- false
+      lossAcc,samplesAcc
     else
       let samplesX = data.[query].numberOfSamples
       printfn "Evaluating %d sequences" samplesX
@@ -250,30 +233,12 @@ let evaluate (reader:MinibatchSource)  task =
       inputs.Add(labelsVar,new MinibatchData(yV))
       let r = eval.TestMinibatch(inputs,device)
       printfn "%A" r
+      run (r::lossAcc, samplesX::samplesAcc)
 
-(* comparison with python model
-let model = Function.Load(modelFile current_task, device)
-let pyModel = Function.Load(@"D:\repodata\fscntk\l_py_m.bin",device)
-let f x = x |> Seq.filter (fun (p:Parameter)->p.Uid.StartsWith("Input",StringComparison.CurrentCultureIgnoreCase)) |> Seq.toArray
-let b1  = model.Parameters() |> f
-let b2  = pyModel.Parameters() |> f
-Seq.zip (model.Parameters()) (pyModel.Parameters()) 
-|> Seq.toArray 
-|> Array.map(fun (a,b)->a.Name,a.Uid,!++ a.Shape,"##", b.Name,b.Uid, !++ b.Shape)
+  let ls,smpls = run ([],[])
 
-//ordering is different among parameters between F# and python models - does is matter?
-val it : (string * string * Shape * string * string * string * Shape) [] =
-  [|("W", "Parameter109", Ds [300; 129], "##", "W", "Parameter11549",
-     Ds [300; 129]);
-    ("b", "Parameter10", Ds [1200], "##", "b", "Parameter11550", Ds [129]);
-    ("W", "Parameter11", Ds [150; 1200], "##", "b", "Parameter11100",
-     Ds [1200]);
-    ("embed", "Parameter2", Ds [943; 150], "##", "W", "Parameter11101",
-     Ds [150; 1200]);
-    ("H", "Parameter12", Ds [300; 1200], "##", "H", "Parameter11102",
-     Ds [300; 1200]);
-    ("b", "Parameter110", Ds [129], "##", "E", "Parameter11089", Ds [943; 150])|]
-*)
+  printfn "metric %0.2f * %d" (List.average ls * 100.0) (List.sum smpls)
+
 
 //actually test the model
 let do_test() =
@@ -281,60 +246,60 @@ let do_test() =
   evaluate reader current_task
 
 
+//use the trained model to predict the tag for each
+//word in a query
+let test_slot_tagging() =
+  let queryFile = @"D:\Repos\cntk\Examples\LanguageUnderstanding\ATIS\BrainScript\query.wl"
+  let slotsFile = @"D:\Repos\cntk\Examples\LanguageUnderstanding\ATIS\BrainScript\slots.wl"
+  let query_dict = queryFile |> File.ReadLines |> Seq.mapi (fun i q -> q,i) |> Map.ofSeq
+  let slots_wl = slotsFile |> File.ReadLines |> Seq.toArray
+  let slot_dict  = slots_wl |> Seq.mapi (fun i q -> q,i) |> Map.ofSeq
+
+  let query = "BOS flights from new york to seattle EOS"
+  let words = query.Split([|' '|])
+
+  let ws =  words |> Array.map (fun w -> query_dict.[w])
+  
+  printfn "Encoded words %A" (Array.zip words ws)
+  let zeros() = Array.create query_dict.Count 0.f
+  let onehot = ws |> Array.map (fun w->let a = zeros() in a.[w] <- 1.f; a)
+  //slot_dict.Count
+  //query_dict.["BOS"]
+  //onehot.[0] |> Array.findIndex (fun x->x = 1.0f)
+  //onehot.[0].[178]
+
+  let model = Function.Load(modelFile Slot_Tagging, device)   //load model from temp file created during training 
+  let xVar = model.Arguments.[0]
+  let yVar = model.Outputs.[0]
+  let v = Value.CreateSequence(xVar.Shape, onehot |> Array.collect yourself, device)
+  let outp = idict[yVar,(null:Value)]
+  model.Evaluate(idict[xVar,v],outp,device)
+
+  let ys = outp.[yVar].GetDenseData<float32>(yVar)  
+
+  let best = 
+    ys.[0] 
+    |> Seq.chunkBySize yVar.Shape.Dimensions.[0] 
+    |> Seq.map (fun xs-> 
+      xs 
+      |> Seq.mapi (fun i x->i,x) 
+      |> Seq.maxBy snd |> fst) //take the index of the max value
+    |> Seq.toArray
+  printfn "Best: %A" best
+
+  let tagged =
+    Array.zip
+      words
+      (best |> Array.map (fun i->slots_wl.[i]))
+  printfn "Tagged: %A" tagged
+
+//
+
 (*
 do_train()
 
-
 do_test() 
-*)
 
-(*
-let z1 = create_model() x
-z1.Func.Save(@"D:\repodata\fscntk\m_fs_untrained.bin")
+test_slot_tagging()
 
 *)
-
-(*
-save and reload to check model and loss
-
-let z = create_model() x
-let l,a = create_criterion_function z y
-let mf = @"D:\repodata\fscntk\l_fs_m.bin"
-let lf = @"D:\repodata\fscntk\l_fs_l.bin"
-z.Func.Save(mf)
-l.Func.Save(lf)
-
-let z' = Function.Load(mf,device)
-let l' = Function.Load(lf,device)
-*)
-
-open FSharp.Charting 
-
-let stepTrain() =
-  let task = current_task
-
-  let mF = 
-    let model = Function.Load(@"D:\repodata\fscntk\l_fs2_m.bin",device) |> F
-    let reader = create_reader (Path.Combine(folder,"atis.train.ctf")) true
-    //model
-    train reader model 10 task
-
-  let mP = 
-    let model = Function.Load(@"D:\repodata\fscntk\l_py_m.bin",device) |> F
-    let reader = create_reader (Path.Combine(folder,"atis.train.ctf")) true
-    //model
-    train reader model 10 task
-
-  let sortedParms = Seq.filter (fun (p:Variable) ->p.IsParameter) >> Seq.sortBy (fun p -> p.Shape.TotalSize)
-  let printParms : Variable seq -> unit = Seq.iter(fun (p:Variable)->printfn "%s, %d, %A, %A" p.Name p.Shape.TotalSize p.Shape.Dimensions p.NeedsGradient)
-  let pF = sortedParms mF.Func.Inputs
-  let pP = sortedParms mP.Func.Inputs
-
-  printParms pF
-  printParms pP
-
-  Seq.zip pF pP 
-  |> Seq.map (fun (pf,pp) ->
-    let t = sprintf "%s %A" pf.Name pf.Shape.Dimensions
-    [pf;pp] |> List.map (getValue>>Chart.FastPoint) |> Chart.Combine |> Chart.WithTitle t)
-  |> Seq.toArray

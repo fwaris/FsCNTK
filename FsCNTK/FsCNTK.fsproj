@@ -6,7 +6,7 @@
     <Platform Condition=" '$(Platform)' == '' ">AnyCPU</Platform>
     <SchemaVersion>2.0</SchemaVersion>
     <ProjectGuid>69928b58-4265-48a0-9817-2a5772d7c4dc</ProjectGuid>
-    <OutputType>Exe</OutputType>
+    <OutputType>Library</OutputType>
     <RootNamespace>FsCNTK</RootNamespace>
     <AssemblyName>FsCNTK</AssemblyName>
     <UseStandardResourceNames>true</UseStandardResourceNames>
@@ -73,12 +73,15 @@
     <None Include="Scripts\SetEnv.fsx" />
     <None Include="Scripts\TestDCGAN.fsx" />
     <None Include="Scripts\TestLstm.fsx" />
+    <None Include="Scripts\imgs\LSTM_Lang_Model.Png" />
     <None Include="ScratchPad\LstmSimple.fsx" />
     <None Include="ScratchPad\Scratch.fsx" />
     <None Include="Local\readme.md" />
     <None Include="Local\T1.fsx" />
     <None Include="Local\CA1.fsx" />
     <None Include="Local\GridSearchCA.fsx" />
+    <None Include="Local\TestPred.fsx" />
+    <None Include="Local\TestRun.fsx" />
   </ItemGroup>
   <ItemGroup>
     <Reference Include="Cntk.Core.Managed-2.5">

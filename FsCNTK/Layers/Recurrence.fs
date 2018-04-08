@@ -8,7 +8,6 @@ open Layers
 #nowarn "25"
 
 module Layers_Recurrence =
-  open FsBase
   
   type private Cell = LSTM | GRU | RNNStep
           
@@ -353,24 +352,25 @@ module Layers_Recurrence =
 
         if state_shapes.Length <> List.length states then failwith "number of states should match step function"
 
-        let out_forward_vars = 
-          List.zip states state_shapes 
-          |> List.map (fun (n,s) ->  
-            Node.Placeholder
-              (
-                s, 
-                x.Var.DynamicAxes))
+        //placeholder for each state variable
+        let out_vars_fwd = state_shapes |> List.map (fun s -> Node.Placeholder(s,x.Var.DynamicAxes))
 
-        let out_vars = func out_forward_vars x
-        let out_actual = List.zip out_vars states |> List.map (fun (v,s) -> L.delay(v,Some s,time_step,""))
+        //placeholders run through the delay function for prior (or future) values
+        let prev_out_vars = 
+          List.zip out_vars_fwd states 
+          |> List.map (fun (ph,st) ->  L.delay(ph,Some st,time_step,""))
 
-        //rewire to make recurrence loop and remove placeholder variables
+        //call the step function with delayed values
+        let out = func prev_out_vars x
+
+        //loop - replace placeholders with step function output to close the loop
         let out_vars = 
-          List.zip out_forward_vars out_actual
+          List.zip out_vars_fwd out
           |> List.map (fun (fw,ac) -> 
             ac.Func.ReplacePlaceholders(idict[fw.Var,ac.Var]) |> F )
 
-        out_vars
+        //return step function output
+        out
 
     static member Recurrence
       (
