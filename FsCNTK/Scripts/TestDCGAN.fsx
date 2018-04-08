@@ -106,7 +106,7 @@ let minibatch_size = 128u
 let num_minibatches = if isFast then 2 else 500000
 let lr = 0.0002
 let momentum = 0.5 //equivalent to beta1
-let cntk_samples_folder = @"D:\Repos\cntk231\cntk\Examples\Image\DataSets\MNIST" //from CNTK download
+let cntk_samples_folder = @"D:\Repos\cntk\Examples\Image\DataSets\MNIST" //from CNTK download
 //let cntk_samples_folder = @"F:\s\cntk\Examples\Image\DataSets\MNIST" //from CNTK download
 
 let build_graph noise_shape image_shape generator discriminiator =
@@ -128,10 +128,12 @@ let build_graph noise_shape image_shape generator discriminiator =
   let G_loss = 1.0 - O.log D_fake
   let D_loss = - (O.log D_real + O.log(1.0 - D_fake))
 
-  G_loss.Func.Save(Path.Combine(@"D:\repodata\fscntk","G_loss.bin"))
-  D_loss.Func.Save(Path.Combine(@"D:\repodata\fscntk","D_loss.bin"))
-  D_fake.Func.Save(Path.Combine(@"D:\repodata\fscntk","D_fake.bin"))
-  D_real.Func.Save(Path.Combine(@"D:\repodata\fscntk","D_real.bin"))
+  let models_folder = @"D:\repodata\fscntk"
+
+  G_loss.Func.Save(Path.Combine(models_folder,"G_loss.bin"))
+  D_loss.Func.Save(Path.Combine(models_folder,"D_loss.bin"))
+  D_fake.Func.Save(Path.Combine(models_folder,"D_fake.bin"))
+  D_real.Func.Save(Path.Combine(models_folder,"D_real.bin"))
 
   let G_learner = C.AdamLearner(
                       O.parms X_fake |> parmVector,

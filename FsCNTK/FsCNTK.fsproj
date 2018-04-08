@@ -74,6 +74,8 @@
     <None Include="Scripts\TestDCGAN.fsx" />
     <None Include="Scripts\TestLstm.fsx" />
     <None Include="Scripts\imgs\LSTM_Lang_Model.Png" />
+    <None Include="Scripts\imgs\Discriminator_Loss.Png" />
+    <None Include="Scripts\imgs\Generator_loss.Png" />
     <None Include="ScratchPad\LstmSimple.fsx" />
     <None Include="ScratchPad\Scratch.fsx" />
     <None Include="Local\readme.md" />
