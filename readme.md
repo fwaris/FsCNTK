@@ -10,8 +10,8 @@ A F# functional wrapper over CNTK's .Net API
 [Train GAN to generate digits](FsCNTK/Scripts/TestDCGAN.fsx) - (requires GPU)
 
 
-##### Models
-<a href="FsCNTK/Scripts/imgs/Generator_loss.Png"><img src="FsCNTK/Scripts/imgs/Generator_loss.Png" height="150"></a>   
+##### Models - Generator and Discriminator
+<a href="FsCNTK/Scripts/imgs/Generator_loss.Png"><img src="FsCNTK/Scripts/imgs/Generator_loss.Png" height="150"></a>
 <a href="FsCNTK/Scripts/imgs/Discriminator_Loss.Png"><img src="FsCNTK/Scripts/imgs/Discriminator_Loss.Png" height="150"></a>   
 
 
