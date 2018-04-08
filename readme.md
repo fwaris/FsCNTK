@@ -10,14 +10,14 @@ A F# functional wrapper over CNTK's .Net API
 [Train GAN to generate digits](FsCNTK/Scripts/TestDCGAN.fsx) - (requires GPU)
 
 
-##### Generator Model
+##### Models
 <a href="FsCNTK/Scripts/imgs/Generator_loss.Png"><img src="FsCNTK/Scripts/imgs/Generator_loss.Png" align="left" height="150"></a>
 
 
-##### Discriminator Model
 <a href="FsCNTK/Scripts/imgs/Discriminator_Loss.Png"><img src="FsCNTK/Scripts/imgs/Discriminator_Loss.Png" align="left" height="150"></a>
 
-
+<br  />
+<br  />
 ### LSTM
 [LSTM for Language Understanding](FsCNTK/Scripts/TestLstm.fsx) - (requires GPU)
 ##### Model
