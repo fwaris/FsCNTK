@@ -11,7 +11,9 @@ module Layers_Recurrence =
   
   type private Cell = LSTM | GRU | RNNStep
           
-  type StepFunction = Shape list (*shapes of states*) * (Node list (*states*) -> Node (* input *) -> Node list)
+  type StepFunction = 
+    //Shape list (*shapes of states*) * 
+    (Node (*states*) -> Node (* input *) -> Node (* combined outputs *)) // function signature
 
   type private RParms =
     {
@@ -65,26 +67,6 @@ module Layers_Recurrence =
       let name = defaultArg name ""
       fun (x:Node) -> L.delay (x,initial_state,time_step,name)
 
-    static member Stabilizer
-      (
-        ?steepness,
-        ?enable_self_stabilization,
-        ?name
-      )
-      =
-        let steepness = defaultArg steepness 4
-        let enable_self_stabilization = defaultArg enable_self_stabilization true
-        let name = defaultArg name ""
-
-        fun (x:Node) ->
-          if not enable_self_stabilization then x
-          else
-            let init_parm = Math.Log(Math.Exp(float steepness) - 1.0) / (float steepness)
-            let param = Node.Parm(Ds[],init=init_parm,name="alpha")
-            let param = if steepness = 1 then param else (float steepness) .* param 
-            let beta = O.softplus param 
-            let r = beta .* x
-            r
 
     static member private RecurrentBlock
       (
@@ -129,10 +111,10 @@ module Layers_Recurrence =
 
       let cell_shape_stacked_H  = D stacked_dim_h
 
-      let Sdh = L.Stabilizer(enable_self_stabilization=enable_self_stabilization, name="dh_stabilizer")
-      let Sdc = L.Stabilizer(enable_self_stabilization=enable_self_stabilization, name="dc_stabilizer")
+      let Sdh = B.Stabilizer(enable_self_stabilization=enable_self_stabilization, name="dh_stabilizer")
+      let Sdc = B.Stabilizer(enable_self_stabilization=enable_self_stabilization, name="dc_stabilizer")
       //let Sct = L.Stabilizer(enable_self_stabilization=enable_self_stabilization, name="c_stabilizer") //for peepholes
-      let Sht = L.Stabilizer(enable_self_stabilization=enable_self_stabilization, name="P_stabilizer")
+      let Sht = B.Stabilizer(enable_self_stabilization=enable_self_stabilization, name="P_stabilizer")
 
       let b = Node.Parm(               cell_shape_stacked,   init=init_bias, name="b")
       let W = Node.Parm(   O.shape x + cell_shape_stacked,   init=init, name="W")
@@ -181,7 +163,13 @@ module Layers_Recurrence =
 
 
       //Great reference: http://colah.github.io/posts/2015-08-Understanding-LSTMs/
-      let lstm (x:Node) (dh,dc)   =
+      let lstm states (x:Node)   =
+        let dh,dc =
+          match O.uncombine states with
+          | []        -> failwithf "expect initial state"
+          | a::b::_   -> a,b
+          | [a]       -> a,a
+
         let rp =
             L.RecurrentBlock
               (
@@ -222,13 +210,14 @@ module Layers_Recurrence =
         let c = ct                                          //cell value
         let h = match rp.Wmr with Some w -> (rp.Sht ht) * w | None -> ht //if has_projection then C.Times(Wmr, !>Sht(F ht)) else ht
 
-        h,c
+        O.combine [h;c]
 
       let h_shape = out_shape
       let c_shape = defaultArg cell_shape out_shape
 
       //step_function
-      [h_shape; c_shape], fun (h::c::_) (x:Node) -> let (h',c') = lstm x (h,c) in (h'::c'::[])
+      lstm
+      //[h_shape; c_shape], lstm 
 
     static member GRU
       (
@@ -248,7 +237,7 @@ module Layers_Recurrence =
       let enable_self_stabilization = defaultArg enable_self_stabilization false
       let name = defaultArg name ""
 
-      let gru (x:Node) dh =
+      let gru dh (x:Node)  =
 
         let rp =
             L.RecurrentBlock
@@ -291,7 +280,8 @@ module Layers_Recurrence =
         h
       
       //step_function
-      [out_shape],fun (h::_) (x:Node) ->  [gru x h]
+      //[out_shape],gru
+      gru
 
 
     static member RnnStep
@@ -312,7 +302,7 @@ module Layers_Recurrence =
       let enable_self_stabilization = defaultArg enable_self_stabilization false
       let name = defaultArg name ""
 
-      let rnn_step (x:Node) dh =
+      let rnn_step dh (x:Node) =
 
         let rp =
             L.RecurrentBlock
@@ -332,11 +322,11 @@ module Layers_Recurrence =
 
         h
 
-      [out_shape],fun (h::_) (x:Node) ->  [rnn_step x h]
+      //[out_shape],rnn_step
+      rnn_step
 
     static member RecurrenceFrom 
       (
-       step_function:StepFunction, 
        ?go_backwards,
        ?name
       )
@@ -344,28 +334,41 @@ module Layers_Recurrence =
       let go_backwards = defaultArg  go_backwards false //'false' means get past value - somewhat counter intuitive but matches python
       let name = defaultArg name ""
 
-      let state_shapes,func = step_function
-
-      fun  states (x:Node) ->
+      fun (func:Node->Node->Node) states (x:Node) ->
 
         let time_step = if go_backwards then -1 else +1
 
-        if state_shapes.Length <> List.length states then failwith "number of states should match step function"
+        let states = O.uncombine states
+
+        //call step function with dummy state to get the 
+        //the number of states the step function actually needs
+        let tmpSt = Node.Placeholder( D  NDShape.InferredDimension, x.Var.DynamicAxes)
+        let tmpOut = func tmpSt x
+        let tmpOutSts = O.uncombine tmpOut 
+        let tmpStLen = tmpOutSts |> List.length
+
+        //fix the states to match the number of expected states
+        let states = 
+          match List.length states, tmpStLen with
+          | 1,x when states.[0].Var.IsConstant -> [for i in 1..x -> states.[0]]
+          | a,b when a = b -> states
+          | _  -> failwith "number of input states should match what is required by step function or be a constant"
 
         //placeholder for each state variable
-        let out_vars_fwd = state_shapes |> List.map (fun s -> Node.Placeholder(s,x.Var.DynamicAxes))
+        let out_vars_fwd = states |> List.map (fun s -> Node.Placeholder(O.shape s,x.Var.DynamicAxes))
 
         //placeholders run through the delay function for prior (or future) values
         let prev_out_vars = 
           List.zip out_vars_fwd states 
           |> List.map (fun (ph,st) ->  L.delay(ph,Some st,time_step,""))
+          |> O.combine
 
         //call the step function with delayed values
-        let out = func prev_out_vars x
+        let out = func prev_out_vars x 
 
         //loop - replace placeholders with step function output to close the loop
         let out_vars = 
-          List.zip out_vars_fwd out
+          List.zip out_vars_fwd (O.uncombine out)
           |> List.map (fun (fw,ac) -> 
             ac.Func.ReplacePlaceholders(idict[fw.Var,ac.Var]) |> F )
 
@@ -374,7 +377,6 @@ module Layers_Recurrence =
 
     static member Recurrence
       (
-       step_function:StepFunction, 
        ?go_backwards,
        ?initial_states,
        ?init_value,     
@@ -385,19 +387,57 @@ module Layers_Recurrence =
       | Some _, Some _ -> failwithf "Recurrence: both inital_states and inital_value should not be specified together"
       | _,_            -> ()
 
-      fun (x:Node) -> 
+      fun (func:Node->Node->Node) (x:Node) -> 
         let go_backwards = defaultArg  go_backwards false
         let name = defaultArg name ""
-        let state_shapes,_ = step_function
+        //let state_shapes,_ = step_function
 
         let init_value = defaultArg init_value 0.0
-        let cVal = new Constant(!>[|1|], dataType, init_value) :> Variable |> V 
+        let cVal = new Constant(!> [| NDShape.InferredDimension |](*!>[|1|]*), dataType, init_value) :> Variable |> V 
         let initial_states = 
           match initial_states with
-          | None -> state_shapes |> List.map (fun _ ->  cVal )
+          | None    -> cVal 
           | Some rs -> rs
       
-        let recurrence_from = L.RecurrenceFrom(step_function,go_backwards=go_backwards,name=name)
+        let recurrence_from = L.RecurrenceFrom(go_backwards=go_backwards,name=name) func
 
-        if !Layers.trace then printfn ">> Recurrence with %A" (state_shapes |> List.map (dims))
+        if !Layers.trace then printfn ">> Recurrence with %A" (O.uncombine(initial_states) |> List.map (O.shape>>dims))
         recurrence_from initial_states x
+
+    static member Fold
+      (
+       ?go_backwards,
+       ?initial_states,
+       ?init_value,     
+       ?name
+      )                            
+      =
+      match initial_states,init_value with
+      | Some _, Some _ -> failwithf "Recurrence: both inital_states and inital_value should not be specified together"
+      | _,_            -> ()
+
+      fun  (func:Node->Node->Node) (x:Node) -> 
+        let go_backwards = defaultArg  go_backwards false
+        let name = defaultArg name ""
+        //let state_shapes,_ = step_function
+        let init_value = defaultArg init_value 0.0
+
+        let cVal = new Constant(!>[|1|], dataType, init_value) :> Variable |> V 
+
+        let initial_states = 
+          match initial_states with
+          | None    -> cVal
+          | Some rs -> rs
+
+        let recurrence = L.Recurrence(
+                              go_backwards=go_backwards, 
+                              initial_states=initial_states,
+                              init_value=init_value,
+                              name=name) 
+                            func
+
+        let get_final = if go_backwards then O.seq_first else O.seq_last
+        
+        (recurrence >> (O.mapOutputs get_final)) x
+
+

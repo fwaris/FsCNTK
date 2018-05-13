@@ -1,10 +1,13 @@
 ﻿namespace FsCNTK
 open CNTK
-type C = CNTKLib
 
 // F# specific supporting and utility functions 
 
 module FsBase =
+  open System.Windows.Forms
+
+  type C = CNTKLib
+
   //let device = DeviceDescriptor.UseDefaultDevice()
   let mutable device = DeviceDescriptor.GPUDevice(0) //should be configurable
   let dataType = DataType.Float
@@ -59,8 +62,6 @@ module FsBase =
   let inline (!>) (x:^a) : ^b = ((^a or ^b) : (static member op_Implicit : ^a -> ^b) x)
 
   let yourself x = x 
-  
-  let scalar x = Constant.Scalar(dataType,x)
 
   //usually, much shape manipulation is done - so a separate type
  
@@ -187,78 +188,26 @@ module FsBase =
                 name)
         P W
 
-  [<RequireQualifiedAccess>]
-  module O =
+      static member private Const (c:float) = Constant.Scalar(dataType,c) 
+      static member Scalar (c:float) = Node.Const c :> Variable |> V
+   
+      static member ( ./ ) (n:Node,d:float) = C.ElementDivide(n.Var, Node.Const d) |> F
+      static member ( ./ ) (n:Node,d:Node) = C.ElementDivide(n.Var, d.Var) |> F
 
-    let shape = function
-    | V v -> !++ v.Shape
-    | F f -> !++ f.Output.Shape
-    | P p -> !++ p.Shape
+      static member ( .* ) (l:Node,r:float) = C.ElementTimes(l.Var, Node.Const r) |> F
+      static member ( .* ) (l:float,r:Node) = C.ElementTimes(Node.Const l, r.Var) |> F
+      static member ( .* ) (l:Node,r:Node) = C.ElementTimes(l.Var, r.Var) |> F
 
-    let reshape shape (n:Node) = C.Reshape(n.Var, !-- shape) |> F
+      static member ( * ) (l:Node,r:Node) = C.Times(r.Var,l.Var,"") |> F
 
-    let name = function V v -> v.Name | F f -> f.Name | P p -> p.Name
+      static member ( - ) (l:Node, r:Node) = C.Minus(l.Var, r.Var) |> F
+      static member ( - ) (l:float, r:Node) = C.Minus(Node.Const l, r.Var) |> F
+      static member ( - ) (l:Node, r:float) = C.Minus(l.Var, Node.Const r) |> F
+      static member ( ~- ) (n:Node) = C.Negate(n.Var) |> F
 
-    let outputVar = function 
-      | V v -> v
-      | F f -> f.Output
-      | P p -> p.ToFunction().Output
-
-    let parms = function 
-      | F f -> f.Parameters() 
-      | V v -> v.ToFunction().Parameters()
-      | P p -> p.ToFunction().Parameters()
-
-    let clone method substitutions = function
-      | V v -> v.ToFunction().Clone(ParameterCloningMethod.Share,substitutions) |> F
-      | F f -> f.Clone(ParameterCloningMethod.Share,substitutions) |> F
-      | P p -> p.ToFunction().Clone(ParameterCloningMethod.Share,substitutions) |> F
-
-    let log (x:Node) = C.Log(x.Var) |> F
-
-    let slice axis beginIndex endIndex (x:Node) = C.Slice (x.Var, axis, intVector beginIndex, intVector endIndex) |> F
-
-    let last (n:Node) = C.SequenceLast(n.Var) |> F
-
-    let combine (nodes:Node seq) = C.Combine(nodes |> Seq.map (fun n->n.Var) |> varVector) |> F
-
-    let getOutput n = function 
-      | F v -> if v.Outputs.Count < n-1 then failwithf "index exceeds avaiable output variables" else v.Outputs.[n] |> V
-      | _ -> failwith "for function nodes only"
-
-    let sigmod (n:Node) = C.Sigmoid(n.Var) |> F
-
-    let softplus (n:Node) = C.Softplus(n.Var) |> F
-
-    let squared_error (prediction:Node, targets:Node) = C.SquaredError(prediction.Var,targets.Var) |> F
-
-    let cross_entropy_with_softmax(z:Node,labels:Node) = C.CrossEntropyWithSoftmax(z.Var,labels.Var) |> F
-
-    let classification_error(z:Node,labels:Node) = C.ClassificationError(z.Var,labels.Var) |> F
-
-    ///swaps multiplication order to match Python API
-    let times (l:Node, r:Node, name:string) = C.Times(r.Var,l.Var,name) |> F 
-    let times2 (l:Node, r:Node, output_rank, infer_input_rank_to_map, name:string) = 
-      C.Times(r.Var, l.Var ,uint32 output_rank,infer_input_rank_to_map, name ) |> F
-
-  type Node with 
-    static member ( ./ ) (n:Node,d:float) = C.ElementDivide(n.Var, scalar d) |> F
-    static member ( ./ ) (n:Node,d:Node) = C.ElementDivide(n.Var, d.Var) |> F
-
-    static member ( .* ) (l:Node,r:float) = C.ElementTimes(l.Var, scalar r) |> F
-    static member ( .* ) (l:float,r:Node) = C.ElementTimes(scalar l, r.Var) |> F
-    static member ( .* ) (l:Node,r:Node) = C.ElementTimes(l.Var, r.Var) |> F
-
-    static member ( * ) (l:Node,r:Node) = O.times(l,r,"")
-
-    static member ( - ) (l:Node, r:Node) = C.Minus(l.Var, r.Var) |> F
-    static member ( - ) (l:float, r:Node) = C.Minus(scalar l, r.Var) |> F
-    static member ( - ) (l:Node, r:float) = C.Minus(l.Var, scalar r) |> F
-    static member ( ~- ) (n:Node) = C.Negate(n.Var) |> F
-
-    static member ( + ) (l:Node, r:Node) = C.Plus(l.Var, r.Var) |> F
-    static member ( + ) (l:float, r:Node) = C.Plus(scalar l, r.Var) |> F
-    static member ( + ) (l:Node, r:float) = C.Plus(l.Var, scalar r) |> F
+      static member ( + ) (l:Node, r:Node) = C.Plus(l.Var, r.Var) |> F
+      static member ( + ) (l:float, r:Node) = C.Plus(Node.Const l, r.Var) |> F
+      static member ( + ) (l:Node, r:float) = C.Plus(l.Var, Node.Const r) |> F
 
 
 

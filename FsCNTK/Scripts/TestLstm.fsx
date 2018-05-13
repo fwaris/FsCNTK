@@ -70,10 +70,12 @@ let create_reader path is_training =
     )
 
 //model
+
 let create_model() =
+  let cell = L.LSTM(D hidden_dim,enable_self_stabilization=false)
   L.Embedding(D emb_dim, name="embed")
-  >> L.Recurrence(L.LSTM(D hidden_dim, enable_self_stabilization=false), go_backwards=false, init_value=0.1)
-  >> List.head
+  >> L.Recurrence(go_backwards=false, init_value=0.1) cell
+  >> O.getOutput 0
   >> L.Dense(D num_labels, name="classify")
 
 //loss function

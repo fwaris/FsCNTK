@@ -70,6 +70,7 @@ module FsiAutoShow =
 #load "..\ImageUtils.fs"
 #load "..\Probability.fs"
 #load "..\FsBase.fs"
+#load "..\Operations.fs"
 #load "..\Blocks.fs"
 #load "..\Layers\LayersBase.fs"
 #load "..\Layers\Dense.fs"
@@ -80,4 +81,5 @@ module FsiAutoShow =
 #load "..\Layers\ConvolutionTranspose.fs"
 #load "..\Layers\ConvolutionTranspose2D.fs"
 #load "..\Layers\Recurrence.fs"
+#load "..\Layers\Attention.fs"
 

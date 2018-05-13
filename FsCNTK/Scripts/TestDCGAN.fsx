@@ -84,7 +84,7 @@ let convolutional_generator =
       output_shape=Ds[img_h; img_w],
       name="G h3"
     )
-  >> O.reshape (Ds [ g_output_dim])
+  >> O.reshapeF (Ds [ g_output_dim])
 
 
 // discriminator 
@@ -93,7 +93,7 @@ let convolutional_discriminator  =
   let dfc_dim = 1024
   let df_dim = 64
 
-  O.reshape (Ds [1; img_h; img_w])
+  O.reshapeF (Ds [1; img_h; img_w])
   >> L.Convolution2D(D dkernel, num_filters=1, strides=D dstride, name="D h0")
   >> bn_with_leaky_relu 0.2
   >> L.Convolution2D(D dkernel, num_filters=df_dim,strides=D dstride, name="D h1")

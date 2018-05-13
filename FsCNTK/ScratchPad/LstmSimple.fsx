@@ -38,9 +38,10 @@ let labels = Node.Input(D numOutputClasses, dynamicAxes=[Axis.DefaultBatchAxis()
   //  new List<Axis>() { Axis.DefaultBatchAxis() }, true);
 
 let model = 
+  let cell = L.LSTM(D hiddenDim, cell_shape=D cellDim,enable_self_stabilization=true)
   L.Embedding(D embeddingDim)
-  >> L.Recurrence(L.LSTM(D hiddenDim, cell_shape=D cellDim,enable_self_stabilization=true),name="recurrence")
-  >> List.head
+  >> L.Recurrence(name="recurrence") cell
+  >> O.getOutput 0
   >> O.last
   >> L.Dense(D numOutputClasses,name="classifierOutput")
 
@@ -105,11 +106,6 @@ for e in 1 .. numEpochs do
   let evaluationValue = trainer.PreviousMinibatchEvaluationAverage();
   printfn "Epoch: %d CrossEntropyLoss = %f, EvaluationCriterion = %f" 
       e trainLossValue evaluationValue
-
-
-
-
-
 
 //var classifierOutput = LSTMSequenceClassifierNet(features, numOutputClasses, embeddingDim, hiddenDim, cellDim, device, "classifierOutput");
 //var modelPath = Path.Combine(@"D:\repodata\fscntk", "ExampleLstm_model.bin");

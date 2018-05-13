@@ -59,6 +59,7 @@
     <Compile Include="ImageUtils.fs" />
     <Compile Include="Probability.fs" />
     <Compile Include="FsBase.fs" />
+    <Compile Include="Operations.fs" />
     <Compile Include="Blocks.fs" />
     <Compile Include="Layers\LayersBase.fs" />
     <Compile Include="Layers\Dense.fs" />
@@ -69,10 +70,11 @@
     <Compile Include="Layers\ConvolutionTranspose.fs" />
     <Compile Include="Layers\ConvolutionTranspose2D.fs" />
     <Compile Include="Layers\Recurrence.fs" />
-    <Compile Include="TestPgm.fs" />
+    <Compile Include="Layers\Attention.fs" />
     <None Include="Scripts\SetEnv.fsx" />
     <None Include="Scripts\TestDCGAN.fsx" />
     <None Include="Scripts\TestLstm.fsx" />
+    <None Include="Scripts\Seq2Seq.fsx" />
     <None Include="Scripts\imgs\LSTM_Lang_Model.Png" />
     <None Include="Scripts\imgs\Discriminator_Loss.Png" />
     <None Include="Scripts\imgs\Generator_loss.Png" />
@@ -84,6 +86,8 @@
     <None Include="Local\GridSearchCA.fsx" />
     <None Include="Local\TestPred.fsx" />
     <None Include="Local\TestRun.fsx" />
+    <None Include="Local\Malibu.fsx" />
+    <Compile Include="TestPgm.fs" />
   </ItemGroup>
   <ItemGroup>
     <Reference Include="Cntk.Core.Managed-2.5">
