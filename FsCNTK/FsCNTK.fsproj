@@ -60,6 +60,7 @@
     <Compile Include="Probability.fs" />
     <Compile Include="FsBase.fs" />
     <Compile Include="Operations.fs" />
+    <Compile Include="Evaluation.fs" />
     <Compile Include="Blocks.fs" />
     <Compile Include="Layers\LayersBase.fs" />
     <Compile Include="Layers\Dense.fs" />
@@ -69,7 +70,7 @@
     <Compile Include="Layers\Convolution2D.fs" />
     <Compile Include="Layers\ConvolutionTranspose.fs" />
     <Compile Include="Layers\ConvolutionTranspose2D.fs" />
-    <Compile Include="Layers\Recurrence.fs" />
+    <Compile Include="Layers\Sequence.fs" />
     <Compile Include="Layers\Attention.fs" />
     <None Include="Scripts\SetEnv.fsx" />
     <None Include="Scripts\TestDCGAN.fsx" />

@@ -8,6 +8,13 @@ module FsBase =
 
   type C = CNTKLib
 
+  let inline asList sz x  = [for _ in 1 .. sz -> x]
+
+  let inline idict (s:(^a * ^b) seq) =
+      let d = new System.Collections.Generic.Dictionary< ^a, ^b>()
+      s |> Seq.iter d.Add
+      d
+
   //let device = DeviceDescriptor.UseDefaultDevice()
   let mutable device = DeviceDescriptor.GPUDevice(0) //should be configurable
   let dataType = DataType.Float

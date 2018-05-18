@@ -18,6 +18,9 @@ type O =
     let end_axis = defaultArg end_axis (Axis.EndStaticAxis()) //python new_leading_axis resolve to this.
     C.Reshape(n.Var, !-- shape, begin_axis, end_axis) |> F
 
+  static member reconcile_dynamic_axis (operand:Node, axesAsOperand:Node) = 
+    C.ReconcileDynamicAxes(operand.Var, axesAsOperand.Var) |> F
+
   static member name = function V v -> v.Name | F f -> f.Name | P p -> p.Name
 
   static member outputVar = function 
@@ -36,8 +39,6 @@ type O =
     | P p -> p.ToFunction().Clone(method,substitutions) |> F
 
   static member log (x:Node) = C.Log(x.Var) |> F
-
-  static member slice axis beginIndex endIndex (x:Node) = C.Slice (x.Var, axis, intVector beginIndex, intVector endIndex) |> F
 
   static member last (n:Node) = C.SequenceLast(n.Var) |> F
 
@@ -59,6 +60,19 @@ type O =
   static member splice (ns:Node seq) = 
     C.Splice( ns |> Seq.map (fun n->n.Var) |> varVector, new Axis(0)) 
     |> F
+    
+  static member slice (axes:AxisVector) =
+    fun (beginIndex:int list) (endIndex:int list) (x:Node) ->
+      C.Slice (x.Var, axes, intVector beginIndex, intVector endIndex) |> F
+
+  static member slice (axes:Axis seq) =
+    fun beginIndex endIndex (x:Node) ->
+       O.slice (axisVector axes) beginIndex endIndex x
+
+  static member slice (axes:int seq) =
+    fun beginIndex endIndex (x:Node) ->
+      let axes = axes |> Seq.map(fun (a:int) -> new Axis(a))
+      O.slice axes beginIndex endIndex x
 
   static member getOutput n = function 
     | F v when v.Outputs.Count < n - 1  -> failwithf "index exceeds avaiable output variables" 
@@ -86,6 +100,8 @@ type O =
     let name = defaultArg name ""
     C.ReduceSum(n.Var, axes, name) |> F
 
+  static member hardmax (n:Node) = C.Hardmax(n.Var) |> F
+
   static member squared_error (prediction:Node, targets:Node) = C.SquaredError(prediction.Var,targets.Var) |> F
 
   static member cross_entropy_with_softmax(z:Node,labels:Node) = C.CrossEntropyWithSoftmax(z.Var,labels.Var) |> F
@@ -105,7 +121,7 @@ type O =
   static member element_select(condition:Node, thenOperand:Node, elseOperand:Node) = 
     C.ElementSelect(condition.Var, thenOperand.Var, elseOperand.Var) |> F
     
-  static member identity (n:Node)  = C.Combine(varVector [n.Var]) |> F
+  static member identity (n:Node)  = C.Combine(varVector [n.Var]) |> F //can't we just return the node?
 
   static member seq_unpack (n:Node, padding_value, ?no_mask_output, ?name) =
     let no_mask_output = defaultArg no_mask_output false
@@ -116,5 +132,18 @@ type O =
     let name = defaultArg name ""
     C.SequenceBroadcastAs(operand.Var,broadcast_as_operand.Var,name) |> F
 
+  static member seq_where (n:Node) = C.SequenceWhere(n.Var) |> F
+
   static member seq_first (n:Node) = C.SequenceFirst(n.Var) |> F
   static member seq_last (n:Node) = C.SequenceLast(n.Var)   |> F
+
+  static member seq_past_value (n:Node,time_step:int) =  C.PastValue(n.Var, uint32 time_step) |> F
+
+  static member seq_gather (operand:Node, condition:Node, ?name) = 
+    let name = defaultArg name ""
+    C.SequenceGather(operand.Var, condition.Var, name) |> F
+
+  static member seq_is_first (n:Node) = C.SequenceIsFirst(n.Var) |> F
+  static member seq_is_last (n:Node) = C.SequenceIsLast(n.Var) |> F
+
+  static member seq_slice (n:Node, begIdx, endIdx) = C.SequenceSlice(n.Var,begIdx,endIdx) |> F

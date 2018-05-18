@@ -6,7 +6,7 @@ open Layers_Dense
 open Layers_BN
 open Layers_ConvolutionTranspose2D
 open Layers_Convolution2D
-open Layers_Recurrence
+open Layers_Sequence
 open Layers_Attention
 open CNTK
 open System.IO
@@ -40,12 +40,12 @@ let label_vocab_dim = 69
 
 let vocab',i2w,w2i = get_vocab vocab_file
 
-let sInput,sLabel = "S0","S1"
+let sInput,sLabels = "S0","S1"
 let streamConfigurations = 
     ResizeArray<StreamConfiguration>(
         [
             new StreamConfiguration(sInput, input_vocab_dim, true)    
-            new StreamConfiguration(sLabel, label_vocab_dim,true)
+            new StreamConfiguration(sLabels, label_vocab_dim,true)
         ]
         )
 
@@ -79,11 +79,8 @@ let sentence_start =
 
 let  sentence_end_index = Array.IndexOf(vocab',"</s>")
 
-let inputAxis = new Axis("inputAxis")
-let labelAxis = new Axis("labelAxis")
-
 //The main structure we want: https://cntk.ai/jup/cntk204_s2s3.png
-let create_model() =
+let create_model =
 
   let embed =
     if use_embedding then
@@ -135,7 +132,7 @@ let create_model() =
         let x = O.splice [x; h_att]  
         fn dhdc x
 
-    let rr = 
+    let rec_layers = 
       let head::tail = rec_blocks
 
       let r0  = head |>  if use_attention then lstm_with_attention >> !!rec_layer else !!rec_layer
@@ -145,13 +142,123 @@ let create_model() =
 
       (r0::rn) |> List.reduce ( >> )
 
-    history |> (embed >> stab_in >> rr >> stab_out >> proj_out >> L.Label("out_proj_out"))
+    history
+    |> (   embed 
+        >> stab_in 
+        >> rec_layers 
+        >> stab_out 
+        >> proj_out 
+        >> L.Label("out_proj_out"))
 
   decode
 
+let create_model_train (s2smodel:Node->Node->Node) input labels =
+  //The input to the decoder always starts with the special label sequence start token.
+  //Then, use the previous value of the label sequence (for training) or the output (for execution).
+  let past_labels = L.Delay(sentence_start) labels
+  s2smodel past_labels input
 
+let create_model_greedy s2smodel input =
+  let unfold = 
+    L.UnfoldFrom(
+      length_increase = length_increase,
+      until_predicate = O.slice [0] [sentence_end_index] [sentence_end_index]) //python: lambda w:w[...,sentence_end_index]  - gets the indexed value at last dimension
+      (fun history -> s2smodel history input |> O.hardmax)
+  unfold sentence_start input
 
+let create_critetion_function model input labels = 
+  let postprocessed_labels = O.seq_slice(labels,1,0) // <s> A B C </s> --> A B C </s>
+  let z = model input postprocessed_labels
+  let ce = O.cross_entropy_with_softmax(z, postprocessed_labels)
+  let errs = O.classification_error(z, postprocessed_labels)
+  ce,errs
 
-    
+let train 
+  (train_reader:MinibatchSource) 
+  (valid_reader:MinibatchSource) 
+  vocab 
+  i2w 
+  s2smodel 
+  max_epochs 
+  epoch_size 
+  =
+  let x = Node.Input
+            (
+              D input_vocab_dim, 
+              dynamicAxes = [Axis.DefaultDynamicAxis(); Axis.DefaultBatchAxis()] //Sequence due to dynamic axis
+            )
 
+  //label sequence
+  let y = Node.Input
+            (
+              D label_vocab_dim, 
+              dynamicAxes = [Axis.DefaultDynamicAxis(); Axis.DefaultBatchAxis()] 
+            )
 
+  let model_train = create_model_train s2smodel x y
+  let ce,errs = create_critetion_function s2smodel x y
+
+  let model_greedy = create_model_greedy s2smodel x
+
+  let minibatch_size = 72
+  let lr = if use_attention then 0.001 else 0.005
+
+  //lr = C.learning_parameter_schedule_per_sample([lr]*2+[lr/2]*3+[lr/4], epoch_size),
+  //momentum = C.momentum_schedule(0.9366416204111472, minibatch_size=minibatch_size),
+  //gradient_clipping_threshold_per_sample=2.3,
+  //gradient_clipping_with_truncation=True)
+
+  let lr_per_sample = [[lr;lr]; [for _ in 1..3->lr/2.]; [for _ in 1..4->lr/4.]] |> List.collect yourself
+  let lr_per_minibatch = lr_per_sample |> List.mapi (fun i r -> i, r * float minibatch_size)
+  let lr_schedule = schedule lr_per_minibatch epoch_size
+
+  let momentum = new TrainingParameterScheduleDouble(0.9366416204111472,uint32 minibatch_size)
+
+  let options = new AdditionalLearningOptions()
+  options.gradientClippingThresholdPerSample <- 2.3
+  options.gradientClippingWithTruncation <- true
+
+  let learner = C.FSAdaGradLearner(
+                      O.parms model_train |> parmVector ,
+                      lr_schedule,
+                      momentum,
+                      true,                                   //should be exposed by CNTK C# API as C.DefaultUnitGainValue()
+                      null, //not sure what should be the default
+                      options)
+  
+  let trainer = C.CreateTrainer(
+                      model_train.Func,
+                      ce.Func, 
+                      errs.Func,
+                      lrnVector [learner])
+
+  let mutable total_samples = 0
+  let mutable mbs = 0
+  let eval_freq = 100
+  let parms = O.parms model_train 
+  let totalParms = parms |> Seq.map (fun p -> p.Shape.TotalSize) |> Seq.sum
+  printfn "Training %d parameters in %d parameter tensors" totalParms (Seq.length parms)
+
+  let strInput = train_reader.StreamInfo(sInput)
+  let strLabels  = train_reader.StreamInfo(sLabels)
+
+  for epoch in 1 .. max_epochs do
+    while total_samples < (epoch+1) * epoch_size do
+      let mb_train = train_reader.GetNextMinibatch(uint32 minibatch_size, device)
+      let args = idict [x.Var,mb_train.[strInput]; y.Var,mb_train.[strLabels]]
+      let r = trainer.TrainMinibatch(args,device)
+
+      if mbs % eval_freq = 0 then
+        let mb_valid = valid_reader.GetNextMinibatch(1u)
+        let inpStr = mb_valid.[strInput]
+        let e = E.eval inpStr model_greedy
+        //vizualization code to be added later
+        ()
+
+      total_samples <- total_samples + (int mb_train.[strLabels].numberOfSamples)
+      mbs <- mbs + 1
+      
+    let model_path = sprintf @"D:\repodata\fscntk\s2s\model_%d.cmf" epoch
+    printf "Saving final model to '%s'" model_path
+    model_train.Func.Save(model_path)
+    printf "%d epochs complete." max_epochs

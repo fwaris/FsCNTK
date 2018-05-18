@@ -22,13 +22,6 @@ type Activation =
 module Layers =
   let trace = ref false
 
-  let inline asList sz x  = [for _ in 1 .. sz -> x]
-
-  let inline idict (s:(^a * ^b) seq) =
-      let d = new System.Collections.Generic.Dictionary< ^a, ^b>()
-      s |> Seq.iter d.Add
-      d
-
   let internal addActivation (n:Node) = function
       | Activation.NONE        ->              n
       | Activation.ReLU        -> C.ReLU       n.Var   |> F

@@ -6,7 +6,7 @@ open Layers_Dense
 open Layers_BN
 open Layers_ConvolutionTranspose2D
 open Layers_Convolution2D
-open Layers_Recurrence
+open Layers_Sequence
 open CNTK
 open System.IO
 open FsCNTK.FsBase

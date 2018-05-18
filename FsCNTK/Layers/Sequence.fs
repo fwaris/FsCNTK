@@ -7,7 +7,7 @@ open Layers
 
 #nowarn "25"
 
-module Layers_Recurrence =
+module Layers_Sequence =
   
   type private Cell = LSTM | GRU | RNNStep
           
@@ -342,6 +342,7 @@ module Layers_Recurrence =
 
         //call step function with dummy state to get the 
         //the number of states the step function actually needs
+        //TODO: check if this is doable with F# metaprogramming instead
         let tmpSt = Node.Placeholder( D  NDShape.InferredDimension, x.Var.DynamicAxes)
         let tmpOut = func tmpSt x
         let tmpOutSts = O.uncombine tmpOut 
@@ -440,4 +441,63 @@ module Layers_Recurrence =
         
         (recurrence >> (O.mapOutputs get_final)) x
 
+    static member UnfoldFrom
+      (
+       ?until_predicate:(Node->Node),
+       ?length_increase,     
+       ?name
+      )                            
+      =
+      let length_increase = defaultArg length_increase 1.0
+      let name = defaultArg name ""
 
+      fun generator_function initial_state dynamic_axes_like ->
+        
+        let out_axis = 
+          if length_increase = 1.0 then
+            dynamic_axes_like
+          else
+            let factors = O.seq_broadcast_as(Node.Scalar length_increase,dynamic_axes_like)
+            O.seq_where factors 
+
+        let states = O.uncombine initial_state
+        let out_vars_fwd = states |> List.map (fun s -> Node.Placeholder(O.shape s,dynamic_axes_like.Var.DynamicAxes))
+
+        //placeholders run through the delay function for prior values
+        let prev_out_vars = 
+          List.zip out_vars_fwd states 
+          |> List.map (fun (ph,st) ->  L.delay(ph,Some st,1,""))
+          |> O.combine
+
+        //generator function emits output and optionally new state
+        let z = generator_function prev_out_vars 
+
+        let output = O.getOutput 0 z
+      
+        let newState = 
+          if z.Func.Outputs.Count = 1 then
+            output
+          else
+            O.uncombine z |> List.tail |> O.combine
+ 
+        //loop - replace placeholders with generator func output to close the loop
+        let out_vars = 
+          List.zip out_vars_fwd (O.uncombine newState)
+          |> List.map (fun (fw,ac) -> 
+            let ac = O.reconcile_dynamic_axis(ac,out_axis)
+            ac.Func.ReplacePlaceholders(idict[fw.Var,ac.Var]) |> F )
+
+        match until_predicate with
+        | None                  -> output
+        | Some until_predicate  ->
+            let valid_frames =
+                L.Recurrence(initial_states=Node.Scalar 1.0)                   // initial state
+                  (fun (h:Node) (x:Node) -> (1.0 - O.seq_past_value(x,1)) * h) //step function: stops when input returns a 1
+                  (until_predicate output)                                     //input: zeros followed by a 1 (in most cases)                      
+
+            let output = O.seq_gather(output, valid_frames, name="valid_output")
+            output
+        
+
+
+        
