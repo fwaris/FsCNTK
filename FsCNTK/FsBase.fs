@@ -87,6 +87,10 @@ module FsBase =
 
   //Shape operations
   type Shape with 
+      member x.Item(i:int) = (dims x).[i] |> D
+
+      member x.GetSlice(start1,finish1) = (x |> dims).GetSlice(start1,finish1) |> Ds
+
       static member ( + ) (s1:Shape,s2:Shape) =
           match s1,s2 with
           | D i, D j -> Ds [i; j]
@@ -126,6 +130,12 @@ module FsBase =
 
       member x.Var = match x with V v -> v | F f -> !> f | P p -> p :> Variable
       member x.Func = match x with V v -> v.ToFunction() | F f -> f | P p -> p.ToFunction()
+
+      member x.Item(i:int) = 
+        match x with 
+        | F v when v.Outputs.Count < i - 1  -> failwithf "index exceeds avaiable output variables" 
+        | F v                               -> v.Outputs.[i] |> V
+        | x                                 -> x
 
       //probably not a good idea to use this directly
       //should use specfic helper methods
@@ -167,7 +177,8 @@ module FsBase =
                                 needsGradient)
         V v
 
-      static member Placeholder(shape,dynamicAxes:Axis seq) =
+      static member Placeholder(shape,?dynamicAxes:Axis seq) =
+        let dynamicAxes = defaultArg dynamicAxes (Axis.UnknownDynamicAxes() |> Seq.cast<_>)
         let v = Variable.PlaceholderVariable(!-- shape, ResizeArray(dynamicAxes))
         V v
                     
@@ -195,7 +206,7 @@ module FsBase =
                 name)
         P W
 
-      static member private Const (c:float) = Constant.Scalar(dataType,c) 
+      static member private Const (c:float) =  Constant.Scalar(dataType, c, device)
       static member Scalar (c:float) = Node.Const c :> Variable |> V
    
       static member ( ./ ) (n:Node,d:float) = C.ElementDivide(n.Var, Node.Const d) |> F

@@ -70,11 +70,12 @@ let create_reader path is_training =
     )
 
 //model
+let cVal = new Constant(!> [| NDShape.InferredDimension |], dataType, 0.1) :> Variable |> V 
 
 let create_model() =
   let cell = L.LSTM(D hidden_dim,enable_self_stabilization=false)
   L.Embedding(D emb_dim, name="embed")
-  >> L.Recurrence(go_backwards=false, init_value=0.1) cell
+  >> L.Recurrence(initial_states=[cVal;cVal], go_backwards=false) cell
   >> O.getOutput 0
   >> L.Dense(D num_labels, name="classify")
 

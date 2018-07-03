@@ -1,20 +1,13 @@
 ﻿#load "SetEnv.fsx"
 open FsCNTK
 open FsCNTK.FsBase
-open FsCNTK.Layers
 open Layers_Dense
-open Layers_BN
-open Layers_ConvolutionTranspose2D
-open Layers_Convolution2D
 open Layers_Sequence
-open Layers_Attention
+open Models_Attention
 open CNTK
 open System.IO
-open FsCNTK.FsBase
 open System
 open Blocks
-open FsCNTK
-open System.Drawing
 
 type C = CNTKLib
 Layers.trace := true
@@ -91,14 +84,15 @@ let create_model =
   let gobk = not use_attention
 
   //recurrent layer and cell creation helpers that encapsulate defaults
-  let rec_layer() = L.Recurrence(go_backwards=gobk)
+  let cVal = new Constant(!> [| NDShape.InferredDimension |], dataType, 0.1) :> Variable |> V 
+  let rec_layer() = L.Recurrence(initial_states=[cVal;cVal],go_backwards=gobk)
   let lstmCell() :StepFunction = L.LSTM(D hidden_dim, enable_self_stabilization=true)
 
   let inline ( !! ) f = f() //invoke a parameterless function (used to avoid too many braces)
 
   let LastRecurrence gb = 
     if not use_attention then 
-      L.Fold (go_backwards=gb)
+      L.Fold (initial_states=[cVal;cVal], go_backwards=gb)
     else 
      !!rec_layer
 
@@ -118,7 +112,7 @@ let create_model =
   let stab_out = B.Stabilizer(enable_self_stabilization=true)
   let proj_out = L.Dense(D label_vocab_dim, name="out_proj")
 
-  let attention_model = L.AttentionModel(D attention_dim, name="attension_model")
+  let attention_model = M.AttentionModel(D attention_dim, name="attension_model")
 
   let decode history input =
 
@@ -138,7 +132,7 @@ let create_model =
       let r0  = head |>  if use_attention then lstm_with_attention >> !!rec_layer else !!rec_layer
 
       let rn  = tail |> List.map (fun rec_block -> 
-        L.RecurrenceFrom(go_backwards=gobk) rec_block encoded_input)
+        L.RecurrenceFrom(num_states=2,go_backwards=gobk) rec_block encoded_input)
 
       (r0::rn) |> List.reduce ( >> )
 
@@ -146,6 +140,7 @@ let create_model =
     |> (   embed 
         >> stab_in 
         >> rec_layers 
+        >> O.getOutput 0
         >> stab_out 
         >> proj_out 
         >> L.Label("out_proj_out"))
@@ -262,3 +257,11 @@ let train
     printf "Saving final model to '%s'" model_path
     model_train.Func.Save(model_path)
     printf "%d epochs complete." max_epochs
+
+let do_train() =
+  train train_reader valid_reader vocab' () create_model 1 25000
+
+
+let test() = 
+  
+  ()

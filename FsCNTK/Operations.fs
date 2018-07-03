@@ -2,6 +2,7 @@
 open FsBase
 open CNTK
 open System.Runtime.Remoting.Metadata.W3cXsd2001
+open System.Runtime.Remoting.Metadata.W3cXsd2001
 
 //operation wrappers
 type O =
@@ -14,9 +15,20 @@ type O =
   static member reshapeF shape (n:Node) = C.Reshape(n.Var, !-- shape) |> F //reshape for pipelining
 
   static member reshape (n:Node, shape:Shape, ?begin_axis, ?end_axis) = 
+
     let begin_axis = defaultArg begin_axis (new Axis 0)
-    let end_axis = defaultArg end_axis (Axis.EndStaticAxis()) //python new_leading_axis resolve to this.
-    C.Reshape(n.Var, !-- shape, begin_axis, end_axis) |> F
+    let end_axis = defaultArg end_axis (Axis.EndStaticAxis()) //python new_leading_axis resolves to this.
+
+    let sanitize_reshape_axis (a:Axis) =
+      if not a.IsStatic then a
+      elif a = Axis.EndStaticAxis() then new Axis(0)
+      elif a = new Axis(0) then Axis.EndStaticAxis()
+      else new Axis(- a.StaticAxisIndex())
+    
+    let internal_reshape_begin_axis = sanitize_reshape_axis(end_axis)
+    let internal_reshape_end_axis = sanitize_reshape_axis(begin_axis)
+
+    C.Reshape(n.Var, !-- shape, internal_reshape_begin_axis, internal_reshape_end_axis) |> F
 
   static member reconcile_dynamic_axis (operand:Node, axesAsOperand:Node) = 
     C.ReconcileDynamicAxes(operand.Var, axesAsOperand.Var) |> F
@@ -38,7 +50,6 @@ type O =
     | F f -> f.Clone(method,substitutions) |> F
     | P p -> p.ToFunction().Clone(method,substitutions) |> F
 
-  static member log (x:Node) = C.Log(x.Var) |> F
 
   static member last (n:Node) = C.SequenceLast(n.Var) |> F
 
@@ -77,7 +88,8 @@ type O =
   static member getOutput n = function 
     | F v when v.Outputs.Count < n - 1  -> failwithf "index exceeds avaiable output variables" 
     | F v                               -> v.Outputs.[n] |> V
-    | _                                 -> failwith "for function nodes only"
+    | x                                 -> x
+    //| _                               -> failwith "for function nodes only"
 
   static member outputs (n:Node) = n.Func.Outputs |> Seq.map V |> Seq.toList
 
@@ -85,13 +97,41 @@ type O =
 
   static member softplus (n:Node) = C.Softplus(n.Var) |> F
 
+  static member pow (n:Node, p:Node) = C.Pow(n.Var,p.Var) |> F
+
+  static member mean (n:Node) = C.Mean(varVector [n.Var]) |> F
+
+  static member reduce_mean(n:Node, a:Axis) = C.ReduceMean(n.Var, a) |> F
+  static member reduce_mean(n:Node, axis:int) = C.ReduceMean(n.Var,new Axis(axis)) |> F
+  static member reduce_mean(n:Node, axes:int seq) = C.ReduceMean(n.Var, axes |> Seq.map (fun n->new Axis(n)) |> axisVector) |> F
+
+  static member log (x:Node) = C.Log(x.Var) |> F
+
+  static member exp(n:Node) = C.Exp(n.Var) |> F
+
   static member softmax (n:Node, ?axis, ?name ) = 
     let axis = defaultArg axis (new Axis(0))
     let name = defaultArg name ""
     C.Softmax(n.Var,axis,name) |> F
 
+  static member private santize_axis (a:Axis option) =
+    match a with 
+    | None    -> Axis.AllStaticAxes()
+    | Some a when a.IsStatic && a.StaticAxisIndex() <> Axis.EndStaticAxis().StaticAxisIndex() 
+              -> new Axis(-1 - a.StaticAxisIndex())
+    | Some a  -> a
+    //if axis is None:
+    //    return Axis.all_static_axes()
+    //elif isinstance(axis, numbers.Integral):
+    //    return Axis(-axis - 1)
+    //elif axis.is_static_axis and (axis.static_axis_index() != Axis.new_leading_axis().static_axis_index()):
+    //    return Axis(-1 - axis.static_axis_index())
+    //else:
+    //    return axis
+
+
   static member reduce_sum(n:Node, ?axis, ?name) = 
-    let axis = defaultArg axis (new Axis(0))
+    let axis = O.santize_axis axis 
     let name = defaultArg name ""
     C.ReduceSum(n.Var, axis, name) |> F
 

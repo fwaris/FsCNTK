@@ -6,8 +6,8 @@ open FsBase
 open Blocks
 open Layers_Dense
 
-module Layers_Attention =
-  type L with
+module Models_Attention =
+  type M =
 
     //Layer factory function to create a function object that implements an attention model
     //as described in Bahdanau, et al., "Neural machine translation by jointly learning to align and translate."
@@ -53,6 +53,7 @@ module Layers_Attention =
           let projected_encoder_hidden_state = O.seq_broadcast_as(attn_proj_enc(unpacked_encoder_hidden_state), decoder_hidden_state)
 
           let broadcast_valid_mask = O.seq_broadcast_as(O.reshape(valid_mask, Ds[1], new Axis(1)), decoder_hidden_state)
+          //[#,d] [1,*]
 
           let projected_decoder_hidden_state = attn_proj_dec(decoder_hidden_state)
 
@@ -60,7 +61,9 @@ module Layers_Attention =
 
           let attention_logits = attn_proj_tanh(tanh_output)
 
-          let minus_inf = Node.Scalar -1e+30 
+          //let minus_inf = Node.Scalar -1e+30 
+          let minus_inf = new Constant(!> [| |], dataType, -1e+30 ) :> Variable |> V 
+
 
           let masked_attention_logits = O.element_select(broadcast_valid_mask, attention_logits, minus_inf)
 
@@ -68,11 +71,12 @@ module Layers_Attention =
           let attention_weights = L.Label("attention_weights")(attention_weights)
 
           let attended_encoder_hidden_state = 
-            O.reduce_sum(attention_weights * 
-              O.seq_broadcast_as(unpacked_encoder_hidden_state, attention_weights), axis=new Axis(0))
+            O.reduce_sum(
+              attention_weights .* O.seq_broadcast_as(unpacked_encoder_hidden_state, attention_weights), 
+              axis=new Axis(0))
 
           let output = attn_final_stab(O.reshape(attended_encoder_hidden_state, Ds[], new Axis(0), new Axis(1)))
 
-          if !Layers.trace then printfn ">> Attension with %A" (dims attention_dim)
+          if !Layers.trace then printfn ">> Attension Model with %A" (dims attention_dim)
             
           output

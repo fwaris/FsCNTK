@@ -6,7 +6,7 @@
     <Platform Condition=" '$(Platform)' == '' ">AnyCPU</Platform>
     <SchemaVersion>2.0</SchemaVersion>
     <ProjectGuid>69928b58-4265-48a0-9817-2a5772d7c4dc</ProjectGuid>
-    <OutputType>Library</OutputType>
+    <OutputType>Exe</OutputType>
     <RootNamespace>FsCNTK</RootNamespace>
     <AssemblyName>FsCNTK</AssemblyName>
     <UseStandardResourceNames>true</UseStandardResourceNames>
@@ -88,11 +88,12 @@
     <None Include="Local\TestPred.fsx" />
     <None Include="Local\TestRun.fsx" />
     <None Include="Local\Malibu.fsx" />
+    <None Include="Local\wtte.fsx" />
     <Compile Include="TestPgm.fs" />
   </ItemGroup>
   <ItemGroup>
-    <Reference Include="Cntk.Core.Managed-2.5">
-      <HintPath>..\packages\CNTK.GPU.2.5.0\lib\net45\x64\Cntk.Core.Managed-2.5.dll</HintPath>
+    <Reference Include="Cntk.Core.Managed-2.5.1d">
+      <HintPath>..\..\cntk\x64\Debug\Cntk.Core.Managed-2.5.1d.dll</HintPath>
     </Reference>
     <Reference Include="FSharp.Charting">
       <HintPath>..\packages\FSharp.Charting.0.91.1\lib\net45\FSharp.Charting.dll</HintPath>
@@ -113,21 +114,21 @@
     </Reference>
     <Reference Include="System.Windows.Forms" />
   </ItemGroup>
-  <Import Project="..\packages\CNTK.Deps.Cuda.2.5.0\build\net45\CNTK.Deps.Cuda.targets" Condition="Exists('..\packages\CNTK.Deps.Cuda.2.5.0\build\net45\CNTK.Deps.Cuda.targets')" />
+  <Import Project="..\packages\CNTK.Deps.Cuda.2.5.1\build\net45\CNTK.Deps.Cuda.targets" Condition="Exists('..\packages\CNTK.Deps.Cuda.2.5.1\build\net45\CNTK.Deps.Cuda.targets')" />
   <Target Name="EnsureNuGetPackageBuildImports" BeforeTargets="PrepareForBuild">
     <PropertyGroup>
       <ErrorText>This project references NuGet package(s) that are missing on this computer. Use NuGet Package Restore to download them.  For more information, see http://go.microsoft.com/fwlink/?LinkID=322105. The missing file is {0}.</ErrorText>
     </PropertyGroup>
-    <Error Condition="!Exists('..\packages\CNTK.Deps.Cuda.2.5.0\build\net45\CNTK.Deps.Cuda.targets')" Text="$([System.String]::Format('$(ErrorText)', '..\packages\CNTK.Deps.Cuda.2.5.0\build\net45\CNTK.Deps.Cuda.targets'))" />
-    <Error Condition="!Exists('..\packages\CNTK.Deps.cuDNN.2.5.0\build\net45\CNTK.Deps.cuDNN.targets')" Text="$([System.String]::Format('$(ErrorText)', '..\packages\CNTK.Deps.cuDNN.2.5.0\build\net45\CNTK.Deps.cuDNN.targets'))" />
-    <Error Condition="!Exists('..\packages\CNTK.Deps.MKL.2.5.0\build\net45\CNTK.Deps.MKL.targets')" Text="$([System.String]::Format('$(ErrorText)', '..\packages\CNTK.Deps.MKL.2.5.0\build\net45\CNTK.Deps.MKL.targets'))" />
-    <Error Condition="!Exists('..\packages\CNTK.Deps.OpenCV.Zip.2.5.0\build\net45\CNTK.Deps.OpenCV.Zip.targets')" Text="$([System.String]::Format('$(ErrorText)', '..\packages\CNTK.Deps.OpenCV.Zip.2.5.0\build\net45\CNTK.Deps.OpenCV.Zip.targets'))" />
-    <Error Condition="!Exists('..\packages\CNTK.GPU.2.5.0\build\net45\CNTK.GPU.targets')" Text="$([System.String]::Format('$(ErrorText)', '..\packages\CNTK.GPU.2.5.0\build\net45\CNTK.GPU.targets'))" />
+    <Error Condition="!Exists('..\packages\CNTK.Deps.Cuda.2.5.1\build\net45\CNTK.Deps.Cuda.targets')" Text="$([System.String]::Format('$(ErrorText)', '..\packages\CNTK.Deps.Cuda.2.5.1\build\net45\CNTK.Deps.Cuda.targets'))" />
+    <Error Condition="!Exists('..\packages\CNTK.Deps.cuDNN.2.5.1\build\net45\CNTK.Deps.cuDNN.targets')" Text="$([System.String]::Format('$(ErrorText)', '..\packages\CNTK.Deps.cuDNN.2.5.1\build\net45\CNTK.Deps.cuDNN.targets'))" />
+    <Error Condition="!Exists('..\packages\CNTK.Deps.MKL.2.5.1\build\net45\CNTK.Deps.MKL.targets')" Text="$([System.String]::Format('$(ErrorText)', '..\packages\CNTK.Deps.MKL.2.5.1\build\net45\CNTK.Deps.MKL.targets'))" />
+    <Error Condition="!Exists('..\packages\CNTK.Deps.OpenCV.Zip.2.5.1\build\net45\CNTK.Deps.OpenCV.Zip.targets')" Text="$([System.String]::Format('$(ErrorText)', '..\packages\CNTK.Deps.OpenCV.Zip.2.5.1\build\net45\CNTK.Deps.OpenCV.Zip.targets'))" />
+    <Error Condition="!Exists('..\packages\CNTK.GPU.2.5.1\build\net45\CNTK.GPU.targets')" Text="$([System.String]::Format('$(ErrorText)', '..\packages\CNTK.GPU.2.5.1\build\net45\CNTK.GPU.targets'))" />
   </Target>
-  <Import Project="..\packages\CNTK.Deps.cuDNN.2.5.0\build\net45\CNTK.Deps.cuDNN.targets" Condition="Exists('..\packages\CNTK.Deps.cuDNN.2.5.0\build\net45\CNTK.Deps.cuDNN.targets')" />
-  <Import Project="..\packages\CNTK.Deps.MKL.2.5.0\build\net45\CNTK.Deps.MKL.targets" Condition="Exists('..\packages\CNTK.Deps.MKL.2.5.0\build\net45\CNTK.Deps.MKL.targets')" />
-  <Import Project="..\packages\CNTK.Deps.OpenCV.Zip.2.5.0\build\net45\CNTK.Deps.OpenCV.Zip.targets" Condition="Exists('..\packages\CNTK.Deps.OpenCV.Zip.2.5.0\build\net45\CNTK.Deps.OpenCV.Zip.targets')" />
-  <Import Project="..\packages\CNTK.GPU.2.5.0\build\net45\CNTK.GPU.targets" Condition="Exists('..\packages\CNTK.GPU.2.5.0\build\net45\CNTK.GPU.targets')" />
+  <Import Project="..\packages\CNTK.Deps.cuDNN.2.5.1\build\net45\CNTK.Deps.cuDNN.targets" Condition="Exists('..\packages\CNTK.Deps.cuDNN.2.5.1\build\net45\CNTK.Deps.cuDNN.targets')" />
+  <Import Project="..\packages\CNTK.Deps.MKL.2.5.1\build\net45\CNTK.Deps.MKL.targets" Condition="Exists('..\packages\CNTK.Deps.MKL.2.5.1\build\net45\CNTK.Deps.MKL.targets')" />
+  <Import Project="..\packages\CNTK.Deps.OpenCV.Zip.2.5.1\build\net45\CNTK.Deps.OpenCV.Zip.targets" Condition="Exists('..\packages\CNTK.Deps.OpenCV.Zip.2.5.1\build\net45\CNTK.Deps.OpenCV.Zip.targets')" />
+  <Import Project="..\packages\CNTK.GPU.2.5.1\build\net45\CNTK.GPU.targets" Condition="Exists('..\packages\CNTK.GPU.2.5.1\build\net45\CNTK.GPU.targets')" />
   <!-- To modify your build process, add your task inside one of the targets below and uncomment it. 
        Other similar extension points exist, see Microsoft.Common.targets.
   <Target Name="BeforeBuild">

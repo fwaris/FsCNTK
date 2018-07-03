@@ -13,7 +13,7 @@ module Layers_Sequence =
           
   type StepFunction = 
     //Shape list (*shapes of states*) * 
-    (Node (*states*) -> Node (* input *) -> Node (* combined outputs *)) // function signature
+    (Node (*states [combined] *) -> Node (* input *) -> Node (* combined outputs *)) // function signature
 
   type private RParms =
     {
@@ -327,6 +327,7 @@ module Layers_Sequence =
 
     static member RecurrenceFrom 
       (
+       num_states : int, //number of states used by the step function, >= 1
        ?go_backwards,
        ?name
       )
@@ -334,23 +335,19 @@ module Layers_Sequence =
       let go_backwards = defaultArg  go_backwards false //'false' means get past value - somewhat counter intuitive but matches python
       let name = defaultArg name ""
 
-      fun (func:Node->Node->Node) states (x:Node) ->
+      fun (func:StepFunction) states (x:Node) ->
 
         let time_step = if go_backwards then -1 else +1
 
         let states = O.uncombine states
 
-        //call step function with dummy state to get the 
-        //the number of states the step function actually needs
-        //TODO: check if this is doable with F# metaprogramming instead
-        let tmpSt = Node.Placeholder( D  NDShape.InferredDimension, x.Var.DynamicAxes)
-        let tmpOut = func tmpSt x
-        let tmpOutSts = O.uncombine tmpOut 
-        let tmpStLen = tmpOutSts |> List.length
-
-        //fix the states to match the number of expected states
+        let x = O.getOutput 0 x // peel off the first output (as RNN outputs have combined output/states)
+        //let cVal = new Constant(!> [| NDShape.InferredDimension |](*!>[|1|]*), dataType, 0.0) :> Variable |> V 
+        ////fix the states to match the number of expected states
+        //let states1 = [cVal; cVal]
+        //let states = [states.[0]; states.[0]]
         let states = 
-          match List.length states, tmpStLen with
+          match List.length states, num_states with
           | 1,x when states.[0].Var.IsConstant -> [for i in 1..x -> states.[0]]
           | a,b when a = b -> states
           | _  -> failwith "number of input states should match what is required by step function or be a constant"
@@ -365,7 +362,7 @@ module Layers_Sequence =
           |> O.combine
 
         //call the step function with delayed values
-        let out = func prev_out_vars x 
+        let out = func prev_out_vars x
 
         //loop - replace placeholders with step function output to close the loop
         let out_vars = 
@@ -378,62 +375,39 @@ module Layers_Sequence =
 
     static member Recurrence
       (
+       initial_states,
        ?go_backwards,
-       ?initial_states,
-       ?init_value,     
        ?name
       )                            
       =
-      match initial_states,init_value with
-      | Some _, Some _ -> failwithf "Recurrence: both inital_states and inital_value should not be specified together"
-      | _,_            -> ()
+      if List.isEmpty initial_states then failwithf "Recurrence: init_states list cannot be empty. The number of initial states should match the number expected by the step function"
 
       fun (func:Node->Node->Node) (x:Node) -> 
         let go_backwards = defaultArg  go_backwards false
         let name = defaultArg name ""
         //let state_shapes,_ = step_function
-
-        let init_value = defaultArg init_value 0.0
-        let cVal = new Constant(!> [| NDShape.InferredDimension |](*!>[|1|]*), dataType, init_value) :> Variable |> V 
-        let initial_states = 
-          match initial_states with
-          | None    -> cVal 
-          | Some rs -> rs
       
-        let recurrence_from = L.RecurrenceFrom(go_backwards=go_backwards,name=name) func
+        let recurrence_from = L.RecurrenceFrom(List.length initial_states, go_backwards=go_backwards,name=name) func
 
-        if !Layers.trace then printfn ">> Recurrence with %A" (O.uncombine(initial_states) |> List.map (O.shape>>dims))
-        recurrence_from initial_states x
+        if !Layers.trace then printfn ">> Recurrence with %A" (initial_states |> List.map (O.shape>>dims))
+        recurrence_from (O.combine initial_states) x
 
     static member Fold
       (
+       initial_states,
        ?go_backwards,
-       ?initial_states,
-       ?init_value,     
        ?name
       )                            
       =
-      match initial_states,init_value with
-      | Some _, Some _ -> failwithf "Recurrence: both inital_states and inital_value should not be specified together"
-      | _,_            -> ()
 
       fun  (func:Node->Node->Node) (x:Node) -> 
         let go_backwards = defaultArg  go_backwards false
         let name = defaultArg name ""
         //let state_shapes,_ = step_function
-        let init_value = defaultArg init_value 0.0
-
-        let cVal = new Constant(!>[|1|], dataType, init_value) :> Variable |> V 
-
-        let initial_states = 
-          match initial_states with
-          | None    -> cVal
-          | Some rs -> rs
 
         let recurrence = L.Recurrence(
+                              initial_states,
                               go_backwards=go_backwards, 
-                              initial_states=initial_states,
-                              init_value=init_value,
                               name=name) 
                             func
 
@@ -461,7 +435,7 @@ module Layers_Sequence =
             O.seq_where factors 
 
         let states = O.uncombine initial_state
-        let out_vars_fwd = states |> List.map (fun s -> Node.Placeholder(O.shape s,dynamic_axes_like.Var.DynamicAxes))
+        let out_vars_fwd = states |> List.map (fun s -> Node.Placeholder(O.shape s))
 
         //placeholders run through the delay function for prior values
         let prev_out_vars = 
@@ -491,7 +465,7 @@ module Layers_Sequence =
         | None                  -> output
         | Some until_predicate  ->
             let valid_frames =
-                L.Recurrence(initial_states=Node.Scalar 1.0)                   // initial state
+                L.Recurrence(initial_states=[Node.Scalar 1.0])                   // initial state
                   (fun (h:Node) (x:Node) -> (1.0 - O.seq_past_value(x,1)) * h) //step function: stops when input returns a 1
                   (until_predicate output)                                     //input: zeros followed by a 1 (in most cases)                      
 
