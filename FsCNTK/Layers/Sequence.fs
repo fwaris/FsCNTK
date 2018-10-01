@@ -273,7 +273,7 @@ module Layers_Sequence =
         let ct = L.Activation activation (ct_proj + (rs * rp.H1.Value)) 
 
         //Python:  ht = (1 - zt) * ct + zt * dhs
-        let ht = (1. - zt) .* ct + (zt .* dhs) 
+        let ht = ((1. - zt) .* ct) + (zt .* dhs)    //not sure about precedence of .* operator - need brackets to be clear
 
         let h = match rp.Wmr with Some w -> (rp.Sht ht) * w | None -> ht 
 
@@ -283,6 +283,71 @@ module Layers_Sequence =
       //[out_shape],gru
       gru
 
+    //not sure about the correctednes of the python derived
+    //GRU code. This is a slight variation that matches the GRU paper better IMHO
+    static member GRU2
+      (
+        out_shape,
+        ?cell_shape,
+        ?activation,
+        ?init,
+        ?init_bias,
+        ?enable_self_stabilization,
+        ?name
+      )
+      : StepFunction
+      =
+      let activation = defaultArg activation Activation.Tanh
+      let init = defaultArg init (C.GlorotUniformInitializer())
+      let init_bias = defaultArg init_bias 0.0
+      let enable_self_stabilization = defaultArg enable_self_stabilization false
+      let name = defaultArg name ""
+
+      let gru dh (x:Node)  =
+
+        let rp =
+            L.RecurrentBlock
+              (
+                  Cell.GRU, 
+                  out_shape,
+                  defaultArg cell_shape Shape.Unknown,
+                  enable_self_stabilization,
+                  init,
+                  init_bias,
+                  x
+              )
+
+        let dhs = rp.Sdh(dh) //previous value stabilized
+        let projx3 = rp.b + (x * rp.W) 
+        let projh2 = dhs * rp.H 
+
+        let zt_proj = (projx3 |> O.slice rp.stack_axis [0*rp.stacked_dim] [1*rp.stacked_dim])
+                      +
+                      (projh2 |> O.slice rp.stack_axis [0*rp.stacked_dim] [1*rp.stacked_dim])
+
+        let rt_proj = (projx3 |> O.slice rp.stack_axis [1*rp.stacked_dim] [2*rp.stacked_dim])
+                      +
+                      (projh2 |> O.slice rp.stack_axis [1*rp.stacked_dim] [2*rp.stacked_dim])
+
+        let ct_proj =  projx3 |> O.slice rp.stack_axis [2*rp.stacked_dim] [3*rp.stacked_dim]
+
+
+        let zt = O.sigmod zt_proj   // update gate z(t)
+        let rt = O.sigmod rt_proj   // reset gate r(t)
+        let rs = dhs .* rt          // "cell" c
+
+        let ct = L.Activation activation (ct_proj + (rs * rp.H1.Value)) 
+
+        //Python:  ht = (1 - zt) * ct + zt * dhs
+        let ht = ((1. - zt) .* dhs) + (zt .* ct)    //this different from python but seems to match GRU paper https://arxiv.org/pdf/1502.02367.pdf
+                                                    
+        let h = match rp.Wmr with Some w -> (rp.Sht ht) * w | None -> ht 
+
+        h
+      
+      //step_function
+      //[out_shape],gru
+      gru
 
     static member RnnStep
       (

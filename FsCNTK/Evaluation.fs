@@ -2,6 +2,7 @@
 open CNTK
 open FsBase
 type C = CNTKLib
+open ValueInterop
 
 // F# wrappers for model evaluation and value conversion
 
@@ -23,4 +24,19 @@ type E =
   static member eval(mbs:UnorderedMapStreamInformationMinibatchData) =
     fun (strmInf:StreamInformation seq) (n:Node) ->
       let args = Seq.zip n.Func.Arguments strmInf |> Seq.map(fun (v,s)->v,mbs.[s].data) |> idict
-      E.eval args n
+      E.eval args n  
+      
+  //eval single output
+  static member eval1 args = 
+    fun (n:Node) ->
+      let outv = n.Func.Output
+      let outp = idict [outv,(null:Value)] 
+      n.Func.Evaluate(args,outp,device)
+      outp.[outv] |> getArray
+
+  static member weights (n:Node) =
+    n.Func.Parameters() 
+    |> Seq.map(fun p -> 
+        let v2 = Value.Create(p.Shape,[p.Value()],device)
+        p.Name, p.Shape.Dimensions |>Seq.toList, v2 |> getArray)
+    |> Seq.toArray

@@ -1,8 +1,6 @@
 ﻿namespace FsCNTK
 open FsBase
 open CNTK
-open System.Runtime.Remoting.Metadata.W3cXsd2001
-open System.Runtime.Remoting.Metadata.W3cXsd2001
 
 //operation wrappers
 type O =
@@ -99,15 +97,25 @@ type O =
 
   static member pow (n:Node, p:Node) = C.Pow(n.Var,p.Var) |> F
 
+  static member clip(n:Node,l:Node,h:Node) = C.Clip(n.Var,l.Var,h.Var) |> F
+
   static member mean (n:Node) = C.Mean(varVector [n.Var]) |> F
+
+  static member max (n1:Node, n2:Node) = C.ElementMax(n1.Var, n2.Var, "max") |> F
+
+  static member min (n1:Node, n2:Node) = C.ElementMin(n1.Var, n2.Var, "nin") |> F
 
   static member reduce_mean(n:Node, a:Axis) = C.ReduceMean(n.Var, a) |> F
   static member reduce_mean(n:Node, axis:int) = C.ReduceMean(n.Var,new Axis(axis)) |> F
   static member reduce_mean(n:Node, axes:int seq) = C.ReduceMean(n.Var, axes |> Seq.map (fun n->new Axis(n)) |> axisVector) |> F
 
+  static member reduce_max (axes:int seq) (n:Node) = C.ReduceMax(n.Var, axes |> Seq.map (fun n->new Axis(n)) |> axisVector ) |> F
+
   static member log (x:Node) = C.Log(x.Var) |> F
 
   static member exp(n:Node) = C.Exp(n.Var) |> F
+
+  static member abs(n:Node) = C.Abs(n.Var) |> F
 
   static member softmax (n:Node, ?axis, ?name ) = 
     let axis = defaultArg axis (new Axis(0))
@@ -138,7 +146,7 @@ type O =
   static member reduce_sum(n:Node, ?axes, ?name) = 
     let axes = defaultArg axes (axisVector [new Axis(0)])
     let name = defaultArg name ""
-    C.ReduceSum(n.Var, axes, name) |> F
+    C.ReduceSum(n.Var, axes, true, name) |> F
 
   static member hardmax (n:Node) = C.Hardmax(n.Var) |> F
 
@@ -187,3 +195,5 @@ type O =
   static member seq_is_last (n:Node) = C.SequenceIsLast(n.Var) |> F
 
   static member seq_slice (n:Node, begIdx, endIdx) = C.SequenceSlice(n.Var,begIdx,endIdx) |> F
+
+//extensions for Node that leverage operations defined above

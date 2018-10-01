@@ -131,12 +131,21 @@ module FsBase =
       member x.Var = match x with V v -> v | F f -> !> f | P p -> p :> Variable
       member x.Func = match x with V v -> v.ToFunction() | F f -> f | P p -> p.ToFunction()
 
+      ///get output node from combined op output (not same as slicing)
       member x.Item(i:int) = 
         match x with 
         | F v when v.Outputs.Count < i - 1  -> failwithf "index exceeds avaiable output variables" 
         | F v                               -> v.Outputs.[i] |> V
         | x                                 -> x
+     
+      ///For simple slicing (use O.slice for complex slicing operations)
+      member x.GetSlice(s1,e1) = 
+        let axs = axisVector [new Axis(0)] // assume first axis
+        let s1 = defaultArg s1 0
+        let e1 = match e1 with Some e -> e | None -> failwith "end index is required"
+        C.Slice(x.Var, axs, intVector [s1], intVector [e1]) |> F
 
+ 
       //probably not a good idea to use this directly
       //should use specfic helper methods
       static member private Variable (shape,?kind,?value,?needsGradient,?dynamicAxes,?isSparse,?name,?uid) =
@@ -206,26 +215,27 @@ module FsBase =
                 name)
         P W
 
-      static member private Const (c:float) =  Constant.Scalar(dataType, c, device)
-      static member Scalar (c:float) = Node.Const c :> Variable |> V
+      static member private _const (c:float) =  Constant.Scalar(dataType, c, device)
+      static member Scalar (c:float) = Node._const c :> Variable |> V
+      static member Const (c:float) = new Constant( !-- (D 1), dataType, c) :> Variable |> V 
    
-      static member ( ./ ) (n:Node,d:float) = C.ElementDivide(n.Var, Node.Const d) |> F
+      static member ( ./ ) (n:Node,d:float) = C.ElementDivide(n.Var, Node._const d) |> F
       static member ( ./ ) (n:Node,d:Node) = C.ElementDivide(n.Var, d.Var) |> F
 
-      static member ( .* ) (l:Node,r:float) = C.ElementTimes(l.Var, Node.Const r) |> F
-      static member ( .* ) (l:float,r:Node) = C.ElementTimes(Node.Const l, r.Var) |> F
+      static member ( .* ) (l:Node,r:float) = C.ElementTimes(l.Var, Node._const r) |> F
+      static member ( .* ) (l:float,r:Node) = C.ElementTimes(Node._const l, r.Var) |> F
       static member ( .* ) (l:Node,r:Node) = C.ElementTimes(l.Var, r.Var) |> F
 
       static member ( * ) (l:Node,r:Node) = C.Times(r.Var,l.Var,"") |> F
 
       static member ( - ) (l:Node, r:Node) = C.Minus(l.Var, r.Var) |> F
-      static member ( - ) (l:float, r:Node) = C.Minus(Node.Const l, r.Var) |> F
-      static member ( - ) (l:Node, r:float) = C.Minus(l.Var, Node.Const r) |> F
+      static member ( - ) (l:float, r:Node) = C.Minus(Node._const l, r.Var) |> F
+      static member ( - ) (l:Node, r:float) = C.Minus(l.Var, Node._const r) |> F
       static member ( ~- ) (n:Node) = C.Negate(n.Var) |> F
 
       static member ( + ) (l:Node, r:Node) = C.Plus(l.Var, r.Var) |> F
-      static member ( + ) (l:float, r:Node) = C.Plus(Node.Const l, r.Var) |> F
-      static member ( + ) (l:Node, r:float) = C.Plus(l.Var, Node.Const r) |> F
+      static member ( + ) (l:float, r:Node) = C.Plus(Node._const l, r.Var) |> F
+      static member ( + ) (l:Node, r:float) = C.Plus(l.Var, Node._const r) |> F
 
 
 

@@ -103,7 +103,7 @@ let convolutional_discriminator  =
   >> L.Dense(D 1, activation=Activation.Sigmoid, name="D=h3")
 
 let minibatch_size = 128u
-let num_minibatches = if isFast then 2 else 500000
+let num_minibatches = if isFast then 2 else 20000
 let lr = 0.0002
 let momentum = 0.5 //equivalent to beta1
 let cntk_samples_folder = @"D:\Repos\cntk\Examples\Image\DataSets\MNIST" //from CNTK download

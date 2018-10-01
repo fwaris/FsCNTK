@@ -9,6 +9,8 @@ open System.IO
 open System
 open Blocks
 
+//************* do not use - this is still a work in progress 
+
 type C = CNTKLib
 Layers.trace := true
 

@@ -32,12 +32,12 @@ let fullPath paths = Path.GetFullPath(Path.Combine(paths))
 
 //change these for you installation (e.g. GPU vs CPU)
 let dependencies = [
-      @"CNTK.Deps.Cuda.2.5.1\support\x64\Dependency"
-      @"CNTK.Deps.cuDNN.2.5.1\support\x64\Dependency"
-      @"CNTK.Deps.MKL.2.5.1\support\x64\Dependency"
-      @"CNTK.Deps.OpenCV.Zip.2.5.1\support\x64\Dependency"
-      @"CNTK.Deps.OpenCV.Zip.2.5.1\support\x64\Dependency\Release"
-      @"CNTK.GPU.2.5.1\support\x64\Release"
+      @"CNTK.Deps.Cuda.2.6.0\support\x64\Dependency"
+      @"CNTK.Deps.cuDNN.2.6.0\support\x64\Dependency"
+      @"CNTK.Deps.MKL.2.6.0\support\x64\Dependency"
+      @"CNTK.Deps.OpenCV.Zip.2.6.0\support\x64\Dependency"
+      @"CNTK.Deps.OpenCV.Zip.2.6.0\support\x64\Dependency\Release"
+      @"CNTK.GPU.2.6.0\support\x64\Release"
     ]
 
 dependencies 
@@ -46,12 +46,13 @@ dependencies
         fullPath [|pkgdir;dep|] + ";" + Environment.GetEnvironmentVariable("Path"))
     )    
 
-#r @"..\..\packages\CNTK.GPU.2.5.1\lib\net45\x64\Cntk.Core.Managed-2.5.1.dll"
+//uses installed package
+#r @"..\..\packages\CNTK.GPU.2.6.0\lib\netstandard2.0\Cntk.Core.Managed-2.6.dll"
 
 //for debugging from source
 //debug output folder should be on path
 //#I @"D:\Repos\cntk\x64\Debug"
-//#r @"Cntk.Core.Managed-2.5d.dll"
+//#r @"Cntk.Core.Managed-2.5.1d.dll"
 
 //for release source build
 //release output folder should be on path
@@ -60,17 +61,19 @@ dependencies
 // Environment.GetEnvironmentVariable("Path").Split(';') |> Array.iter (printfn "%s")
 
 //charting
-#r @"..\..\packages\FSharp.Charting.0.91.1\lib\net45\FSharp.Charting.dll"
+#r @"..\..\packages\FSharp.Charting.2.1.0\lib\net45\FSharp.Charting.dll"
 #r "System.Windows.Forms.DataVisualization"
 open FSharp.Charting
 module FsiAutoShow = 
     fsi.AddPrinter(fun (ch:FSharp.Charting.ChartTypes.GenericChart) -> ch.ShowChart() |> ignore; "(Chart)")
 
+#r "netstandard.dll" //not sure why this need but script code is now causing issues
 
 #load "..\ImageUtils.fs"
 #load "..\Probability.fs"
 #load "..\FsBase.fs"
 #load "..\Operations.fs"
+#load "..\ValueInterop.fs"
 #load "..\Evaluation.fs"
 #load "..\Blocks.fs"
 #load "..\Layers\LayersBase.fs"
