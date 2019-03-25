@@ -11,12 +11,14 @@ open Blocks
 
 //************* do not use - this is still a work in progress 
 
+//Reference: https://cntk.ai/pythondocs/CNTK_204_Sequence_To_Sequence.html
+
 type C = CNTKLib
 Layers.trace := true
 
 //Folder containing ATIS files which are
 //part of the CNTK binary release download or CNTK git repo
-let folder = @"D:\Repos\cntk\Examples\SequenceToSequence\CMUDict\Data"
+let folder = @"c:\s\Repos\cntk\Examples\SequenceToSequence\CMUDict\Data"
 let place s = Path.Combine(folder,s)
 
 let validation = place "tiny.ctf"
@@ -62,6 +64,8 @@ let valid_reader = create_reader validation true
 let hidden_dim = 512
 let num_layers = 2
 let attention_dim = 128
+let attention_span = 20
+let attention_axis = new Axis(-3)
 let use_attention = true
 let use_embedding = true
 let embedding_dim = 200
@@ -72,7 +76,13 @@ let sentence_start =
   let vb = new NDArrayView(!-- (D vocab'.Length),va,device,true)
   new Constant(vb) :> Variable |> V
 
-let  sentence_end_index = Array.IndexOf(vocab',"</s>")
+let sentence_end = 
+  let va = vocab' |> Array.map (function "</s>" -> 1.f | _ -> 0.f) 
+  let vb = new NDArrayView(!-- (D vocab'.Length),va,device,true)
+  new Constant(vb) :> Variable |> V
+
+
+//let  sentence_end_index = Array.IndexOf(vocab',"</s>")
 
 //The main structure we want: https://cntk.ai/jup/cntk204_s2s3.png
 let create_model =
@@ -114,7 +124,7 @@ let create_model =
   let stab_out = B.Stabilizer(enable_self_stabilization=true)
   let proj_out = L.Dense(D label_vocab_dim, name="out_proj")
 
-  let attention_model = M.AttentionModel(D attention_dim, name="attension_model")
+  let attention_model = M.AttentionModel(D attention_dim, attention_span, attention_axis=attention_axis, name="attention_model")
 
   let decode history input =
 
@@ -129,7 +139,7 @@ let create_model =
         fn dhdc x
 
     let rec_layers = 
-      let head::tail = rec_blocks
+      let head,tail = match rec_blocks with head::tail->head,tail | _ -> failwith "list empty"
 
       let r0  = head |>  if use_attention then lstm_with_attention >> !!rec_layer else !!rec_layer
 
@@ -157,14 +167,16 @@ let create_model_train (s2smodel:Node->Node->Node) input labels =
 
 let create_model_greedy s2smodel input =
   let unfold = 
-    L.UnfoldFrom(
+    L.UnfoldFrom(  
+      (fun history -> s2smodel history input |> O.hardmax),
       length_increase = length_increase,
-      until_predicate = O.slice [0] [sentence_end_index] [sentence_end_index]) //python: lambda w:w[...,sentence_end_index]  - gets the indexed value at last dimension
-      (fun history -> s2smodel history input |> O.hardmax)
+      until_predicate = (fun  (out:Node) -> O.eq(out,sentence_end))) //python: lambda w:w[...,sentence_end_index]  - gets the indexed value at last dimension
+    
   unfold sentence_start input
 
 let create_critetion_function model input labels = 
   let postprocessed_labels = O.seq_slice(labels,1,0) // <s> A B C </s> --> A B C </s>
+  let postprocessed_labels = O.reconcile_dynamic_axis(postprocessed_labels,input)
   let z = model input postprocessed_labels
   let ce = O.cross_entropy_with_softmax(z, postprocessed_labels)
   let errs = O.classification_error(z, postprocessed_labels)
@@ -179,6 +191,8 @@ let train
   max_epochs 
   epoch_size 
   =
+  let inputAxis = new Axis("inputAxis", true)
+  let labelAxis = new Axis("labelAxis", true)
   let x = Node.Input
             (
               D input_vocab_dim, 
@@ -197,6 +211,9 @@ let train
 
   let model_greedy = create_model_greedy s2smodel x
 
+  model_greedy.Func.Save(@"C:\s\repodata\fscntk\s2s\fs.bin")
+
+
   let minibatch_size = 72
   let lr = if use_attention then 0.001 else 0.005
 
@@ -206,10 +223,15 @@ let train
   //gradient_clipping_with_truncation=True)
 
   let lr_per_sample = [[lr;lr]; [for _ in 1..3->lr/2.]; [for _ in 1..4->lr/4.]] |> List.collect yourself
-  let lr_per_minibatch = lr_per_sample |> List.mapi (fun i r -> i, r * float minibatch_size)
+  let lr_per_minibatch = lr_per_sample |> List.mapi (fun i r -> (i+1), r * float minibatch_size)
   let lr_schedule = schedule lr_per_minibatch epoch_size
 
   let momentum = new TrainingParameterScheduleDouble(0.9366416204111472,uint32 minibatch_size)
+  let var_momentum = new TrainingParameterScheduleDouble(0.9999986111120757, uint32 minibatch_size) //from python code
+
+  //Training 8347832 parameters in 29 parameter tensors.
+  //model '.\model_att_True.cmf.0'
+
 
   let options = new AdditionalLearningOptions()
   options.gradientClippingThresholdPerSample <- 2.3
@@ -219,8 +241,8 @@ let train
                       O.parms model_train |> parmVector ,
                       lr_schedule,
                       momentum,
-                      true,                                   //should be exposed by CNTK C# API as C.DefaultUnitGainValue()
-                      null, //not sure what should be the default
+                      true, //should be exposed by CNTK C# API as C.DefaultUnitGainValue()
+                      var_momentum, //not sure what should be the default
                       options)
   
   let trainer = C.CreateTrainer(
@@ -263,7 +285,4 @@ let train
 let do_train() =
   train train_reader valid_reader vocab' () create_model 1 25000
 
-
-let test() = 
-  
-  ()
+do_train()

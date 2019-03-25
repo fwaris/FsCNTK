@@ -15,7 +15,7 @@ open System.IO
 
 type C = CNTKLib
 Layers.trace := true
-let isFast = true
+let isFast = false
 let featureStreamName = "features"
 let labelsStreamName = "labels"
 let imageSize = 28 * 28
@@ -106,7 +106,7 @@ let minibatch_size = 128u
 let num_minibatches = if isFast then 2 else 20000
 let lr = 0.0002
 let momentum = 0.5 //equivalent to beta1
-let cntk_samples_folder = @"D:\Repos\cntk\Examples\Image\DataSets\MNIST" //from CNTK download
+let cntk_samples_folder = @"c:\s\Repos\cntk\Examples\Image\DataSets\MNIST" //from CNTK download
 //let cntk_samples_folder = @"F:\s\cntk\Examples\Image\DataSets\MNIST" //from CNTK download
 
 let build_graph noise_shape image_shape generator discriminiator =

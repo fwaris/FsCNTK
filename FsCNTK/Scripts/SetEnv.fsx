@@ -47,12 +47,12 @@ dependencies
     )    
 
 //uses installed package
-#r @"..\..\packages\CNTK.GPU.2.6.0\lib\netstandard2.0\Cntk.Core.Managed-2.6.dll"
+//#r @"..\..\packages\CNTK.GPU.2.6.0\lib\netstandard2.0\Cntk.Core.Managed-2.6.dll"
 
 //for debugging from source
 //debug output folder should be on path
-//#I @"D:\Repos\cntk\x64\Debug"
-//#r @"Cntk.Core.Managed-2.5.1d.dll"
+#I @"c:\s\Repos\cntk\x64\Debug"
+#r @"Cntk.Core.Managed-2.6d.dll"
 
 //for release source build
 //release output folder should be on path

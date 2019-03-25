@@ -5,6 +5,7 @@ open CNTK
 
 module FsBase =
   open System.Windows.Forms
+  open System.Diagnostics
 
   type C = CNTKLib
 
@@ -89,6 +90,8 @@ module FsBase =
   type Shape with 
       member x.Item(i:int) = (dims x).[i] |> D
 
+      member x.Dims = dims x
+
       member x.GetSlice(start1,finish1) = (x |> dims).GetSlice(start1,finish1) |> Ds
 
       static member ( + ) (s1:Shape,s2:Shape) =
@@ -122,6 +125,8 @@ module FsBase =
   /// wrapper for CNTK Functions, Variables & Parameters:
   /// - for shape conversions (CNTK is column-major whereas Python API is row-major)
   /// - math operators
+ 
+  [<DebuggerDisplay("{DebugDisplay}")>]
   type Node =
     | V of Variable
     | F of Function
@@ -130,6 +135,9 @@ module FsBase =
 
       member x.Var = match x with V v -> v | F f -> !> f | P p -> p :> Variable
       member x.Func = match x with V v -> v.ToFunction() | F f -> f | P p -> p.ToFunction()
+      member x.DebugDisplay = 
+        let axisStr = (if x.Var.HasBatchAxis() then "#" else "") + (if x.Var.HasSequenceAxis() then ", *" else "")
+        sprintf "%s %A [%s]" x.Var.Name (x.Var.Shape |> fromNDShape |> dims) axisStr
 
       ///get output node from combined op output (not same as slicing)
       member x.Item(i:int) = 

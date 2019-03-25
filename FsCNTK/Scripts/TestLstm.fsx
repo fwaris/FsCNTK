@@ -36,7 +36,7 @@ Layers.trace := true
 
 //Folder containing ATIS files which are
 //part of the CNTK binary release download or CNTK git repo
-let folder = @"D:\Repos\cntk\Examples\LanguageUnderstanding\ATIS\Data"
+let folder = @"c:\s\Examples\LanguageUnderstanding\ATIS\Data"
 
 let vocab_size = 943 
 let num_labels = 129

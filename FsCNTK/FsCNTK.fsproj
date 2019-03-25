@@ -95,8 +95,8 @@
     <None Include="Local\wtte.fsx" />
   </ItemGroup>
   <ItemGroup>
-    <Reference Include="Cntk.Core.Managed-2.6">
-      <HintPath>..\packages\CNTK.GPU.2.6.0\lib\netstandard2.0\Cntk.Core.Managed-2.6.dll</HintPath>
+    <Reference Include="Cntk.Core.Managed-2.6d">
+      <HintPath>..\..\..\..\..\..\s\Repos\cntk\x64\Debug\Cntk.Core.Managed-2.6d.dll</HintPath>
     </Reference>
     <Reference Include="FSharp.Charting">
       <HintPath>..\packages\FSharp.Charting.2.1.0\lib\net45\FSharp.Charting.dll</HintPath>

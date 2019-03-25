@@ -1,420 +1,291 @@
 ﻿module Pgm
-//#load "..\Scripts\SetEnv.fsx"
-//this file is only used for native debugging with 
-//#load "..\Scripts\SetEnv.fsx"
-//#r @"F:\Projects\Prognostics\packages\FSharp.Data.2.4.6\lib\net45\FSharp.Data.dll"
-//#r @"D:\Repos\Packages\Packages\packages\FSharp.Data.2.4.6\lib\net45\FSharp.Data.dll"
+//#load "SetEnv.fsx"
 open FsCNTK
 open FsCNTK.FsBase
 open Layers_Dense
-open Layers_Dropout
 open Layers_Sequence
+open Models_Attention
 open CNTK
-open Probability
-open FSharp.Data
-open ValueInterop
+open System.IO
 open System
-open System
-//device <- DeviceDescriptor.CPUDevice
-type CNTKLib = C
-let dmap = float32
-//C.SetCheckedMode(true)
+open Blocks
+
+//************* do not use - this is still a work in progress 
+
+//Reference: https://cntk.ai/pythondocs/CNTK_204_Sequence_To_Sequence.html
+
+type C = CNTKLib
+Layers.trace := true
+
+//Folder containing ATIS files which are
+//part of the CNTK binary release download or CNTK git repo
+let folder = @"c:\s\Repos\cntk\Examples\SequenceToSequence\CMUDict\Data"
+let place s = Path.Combine(folder,s)
+
+let validation = place "tiny.ctf"
+let training = place "cmudict-0.7b.train-dev-20-21.ctf"
+let testing = place "cmudict-0.7b.test.ctf"
+let vocab_file = place "cmudict-0.7b.mapping"
+
+let get_vocab path =
+  let vocab = path |> File.ReadLines |> Seq.map (fun s->s.Trim()) |> Seq.toArray
+  let i2w = vocab |> Seq.mapi (fun i w -> i,w) |> Map.ofSeq
+  let w2i = vocab |> Seq.mapi (fun i w -> w,i) |> Map.ofSeq
+  vocab,i2w,w2i
+
+let input_vocab_dim = 69
+let label_vocab_dim = 69
+
+let vocab',i2w,w2i = get_vocab vocab_file
+
+let sInput,sLabels = "S0","S1"
+let streamConfigurations = 
+    ResizeArray<StreamConfiguration>(
+        [
+            new StreamConfiguration(sInput, input_vocab_dim, true)    
+            new StreamConfiguration(sLabels, label_vocab_dim,true)
+        ]
+        )
+
+let  create_reader path is_training =
+  MinibatchSource.TextFormatMinibatchSource
+    (
+      path,
+      streamConfigurations,
+      (if is_training then  MinibatchSource.InfinitelyRepeat else MinibatchSource.FullDataSweep),
+      is_training
+    )
+
+//Train data reader
+let train_reader = create_reader training true 
+
+//Validation data reader
+let valid_reader = create_reader validation true
+
+let hidden_dim = 512
+let num_layers = 2
+let attention_dim = 128
+let attention_span = 20
+let attention_axis = new Axis(-3)
+let use_attention = true
+let use_embedding = true
+let embedding_dim = 200
+let length_increase = 1.5
+
+let sentence_start = 
+  let va = vocab' |> Array.map (function "<s>" -> 1.f | _ -> 0.f) 
+  let vb = new NDArrayView(!-- (D vocab'.Length),va,device,true)
+  new Constant(vb) :> Variable |> V
+
+let sentence_end = 
+  let va = vocab' |> Array.map (function "</s>" -> 1.f | _ -> 0.f) 
+  let vb = new NDArrayView(!-- (D vocab'.Length),va,device,true)
+  new Constant(vb) :> Variable |> V
 
 
-let id_col = "unit_number"
-let time_col = "time"
-let feature_cols = ["op_setting_1"; "op_setting_2"; "op_setting_3"] @ [for i in 1..21 -> sprintf "sensor_measurement_%d" i]
-let column_names = [id_col; time_col] @ feature_cols
+let  sentence_end_index = Array.IndexOf(vocab',"</s>")
 
-(*
-let train_orig = CsvFile.Load(@"https://raw.githubusercontent.com/daynebatten/keras-wtte-rnn/master/train.csv",hasHeaders=false)
-train_orig.Save(@"D:\repodata\fscntk\wtte\train_org.csv")
-let test_x_orig = CsvFile.Load(@"https://raw.githubusercontent.com/daynebatten/keras-wtte-rnn/master/test_x.csv",hasHeaders=false)
-test_x_orig.Save(@"D:\repodata\fscntk\wtte\test_x_orig.csv")
-let test_y_orig = CsvFile.Load(@"https://raw.githubusercontent.com/daynebatten/keras-wtte-rnn/master/test_y.csv",hasHeaders=false)
-test_y_orig.Save(@"D:\repodata\fscntk\wtte\test_y_orig.csv")
-*)
+//The main structure we want: https://cntk.ai/jup/cntk204_s2s3.png
+let create_model =
 
-let train_orig = CsvFile.Load(@"D:\repodata\fscntk\wtte\train_org.csv", hasHeaders=false).Rows |> Seq.toArray
-let test_x_orig = CsvFile.Load(@"D:\repodata\fscntk\wtte\test_x_orig.csv", hasHeaders=false).Rows |> Seq.toArray
-let test_y_orig = CsvFile.Load(@"D:\repodata\fscntk\wtte\test_y_orig.csv", hasHeaders=false).Rows |> Seq.toArray
-
-//scale features to -1,1 drop constant features
-//(plan use ML.Net transforms and pipelines in future)
-let all_data_scaled =
-  let all_data = Array.append train_orig test_x_orig                //combine train/test before scaling
-  let colIdx = column_names |> List.mapi(fun i c->c,i) |> Map.ofSeq //index column names
-  let colMinMax =                                                   //min max of each column
-    feature_cols 
-    |> List.map(fun c -> 
-      let idx = colIdx.[c]
-      let cRows = all_data |> Seq.map (fun r -> r.[idx].AsFloat()) 
-      c,(Seq.min cRows, Seq.max cRows))
-    |> Map.ofList
-  all_data                                                        //scale features (i.e. exclude id and time)
-  |> Seq.map (fun r->
-      seq {
-       yield r.[colIdx.[id_col]].AsFloat()
-       yield r.[colIdx.[time_col]].AsFloat()
-       for f in feature_cols do
-          let idx = colIdx.[f]
-          let mn,mx = colMinMax.[f]
-          if mx <> mn then                                //remove constants
-            let v1 = r.[idx].AsFloat()
-            let v2 = scaler (-1.0,1.0) colMinMax.[f]  v1  //scale to -1,1
-            yield v2
-      }
-      |> Seq.map dmap
-      |> Seq.toArray)
-  |> Seq.toArray
-
-printfn "rows:%d; cols:%d" all_data_scaled.Length all_data_scaled.[0].Length
-
-all_data_scaled |> Array.countBy (fun r->r.[0])
-
-//split back into train/test after scaling
-let train = all_data_scaled.[0..train_orig.Length-1] 
-let test = all_data_scaled.[train_orig.Length ..]
-
-let max_days = 100-1
-
-
-//function to get upto max-days history for an engine-day
-let maxDayHist_X i (engineDays:'a[][]) (curDay:'a[]) = 
-  let hist = 
-    engineDays 
-    |> Array.map (fun xs->xs.[2..])     //keep features
-    |> Array.skip (max 0 (i-max_days))  //skip to just before the first history row
-    |> Array.truncate (min i max_days)  //the # of rows of history to take (no padding needed in cntk)
-  Array.append hist [| curDay.[2..] |]  //append current row to history
-
-//returns float[][][] - [engine_day] [upto 100 days hist] [17 var feature vector]
-let batchSeqHistX isTrain (data:'a[][])  = 
-  data 
-  |> Array.groupBy (fun xs->xs.[0]) //group by engine
-  |> Array.collect(fun (engn,xs) ->
-    if isTrain then                           //for training keep max-days history for each day, on a rolling basis
-      xs |> Array.mapi (fun i ys -> maxDayHist_X i xs ys)
+  let embed =
+    if use_embedding then
+      L.Embedding(D embedding_dim, name="embed")
     else
-      let ys = xs |> Array.last               //for test data just use max-day day history for the *last* day
-      let i = xs.Length-1
-      [| maxDayHist_X i xs ys |])
-
-let train_x = batchSeqHistX true train
-let test_x = batchSeqHistX false test
-
-let train_y =                                 //for each engine-day y is the #of days remaining and 1 (for observed, i.e. not censored)
-  train 
-  |> Array.map(fun xs->xs.[0],xs.[1]) 
-  |> Array.groupBy fst
-  |> Array.map (fun (k,xs) -> k, xs |> Array.maxBy snd |> snd)
-  |> Array.collect (fun (eng,mxd) -> [|for d in mxd .. -1.0f .. 1.0f-> [|d; 1.f|]|])  //engine data is not censored so 2nd is 1
-
-let test_y =                                   //test y is the number of days to faliure 1 (observed)
-  test_y_orig 
-  |> Array.map(fun r->[|r.[0].AsFloat(); 1.0|]) 
-      
-(* validation
-train_x.Length
-train_y.Length
-test_x.Length
-test_y.Length
-
-//validate data with python. use random index to compare e.g.:
-train_x.[2000]
-test_x.[97]
-train_y.[230]
-*)
-
-let tte_mean_train = train_y |> Seq.averageBy (fun x->x.[0]) |> float
-let mean_u = train_y |> Seq.averageBy (fun x->x.[1]) |> float
-
-let init_alpha =
-  let a = -1.0 /log(1.0 - 1.0/(tte_mean_train + 1.0))
-  a/mean_u
-
-let epsilon = 1e-10
-let lowest_val = 1e-45
-let scale_factor = 0.5
-let max_beta = 10.0
-
-let feature_dim = train_x.[0].[0].Length
-let input_x = Node.Input(D feature_dim, dynamicAxes = [Axis.DefaultDynamicAxis(); Axis.DefaultBatchAxis()])
-let input_y = Node.Input(D 2, dynamicAxes = [Axis.DefaultBatchAxis()])
-
-//model uses this version
-let weibull_loglik_discrete (ab_pred:Node) (y_true:Node) =
-  let y_ = y_true.[0..1]
-  let u_ = y_true.[1..2]
-  let a_ = ab_pred.[0..1]
-  let b_ = ab_pred.[1..2]
-
-  let hazard0 = O.pow( O.abs((y_ + epsilon) ./ a_) , b_ )
-  let hazard1 = O.pow( O.abs((y_ + 1.0) ./ a_ ), b_)
-
-  let t = O.log(O.exp(hazard1 - hazard0) - (1.0 - epsilon))
-  (u_ .* t) - hazard1
+      O.identity
   
+  let gobk = not use_attention
 
-let weibull_loss clip_prob (ab_pred:Node) (y_true:Node) =
-  let llh = weibull_loglik_discrete ab_pred y_true
-  let loss = 
-    match clip_prob with 
-    | Some clip_prob ->
-        O.clip(llh, Node.Scalar(log(clip_prob)), Node.Scalar(log(1.0 - clip_prob)) )
-    | None -> llh
-  -loss
+  //recurrent layer and cell creation helpers that encapsulate defaults
+  let cVal = new Constant(!> [| NDShape.InferredDimension |], dataType, 0.1) :> Variable |> V 
+  let rec_layer() = L.Recurrence(initial_states=[cVal;cVal],go_backwards=gobk)
+  let lstmCell() :StepFunction = L.LSTM(D hidden_dim, enable_self_stabilization=true)
+
+  let inline ( !! ) f = f() //invoke a parameterless function (used to avoid too many braces)
+
+  let LastRecurrence gb = 
+    if not use_attention then 
+      L.Fold (initial_states=[cVal;cVal], go_backwards=gb)
+    else 
+     !!rec_layer
+
+  //encoder
+  let encode =
+    seq {
+      yield embed
+      yield B.Stabilizer(enable_self_stabilization=true)
+      yield! seq {for i in 0 .. num_layers-1 -> !!rec_layer !!lstmCell}
+      yield LastRecurrence gobk !!lstmCell
+      yield O.mapOutputsZip [L.Label("encoded_h"); L.Label("encoded_c")] //lstm h and c outputs
+    }
+    |> Seq.reduce ( >> )
+
+  let stab_in = B.Stabilizer(enable_self_stabilization=true)
+  let rec_blocks = [for _ in 1 .. num_layers -> lstmCell() ]
+  let stab_out = B.Stabilizer(enable_self_stabilization=true)
+  let proj_out = L.Dense(D label_vocab_dim, name="out_proj")
+
+  let attention_model = M.AttentionModel(D attention_dim, attention_span, attention_axis=attention_axis, name="attention_model")
+
+  let decode history input =
+
+    let encoded_input = encode(input)
+
+    //compose lstm with attention
+    let lstm_with_attention (fn:StepFunction) : StepFunction =
+      fun (dhdc:Node) (x:Node) ->
+        let dh = O.getOutput 0 dhdc 
+        let h_att = attention_model (O.getOutput 0 encoded_input, dh)
+        let x = O.splice [x; h_att]  
+        fn dhdc x
+
+    let rec_layers = 
+      let head,tail = match rec_blocks with head::tail->head,tail | _ -> failwith "list empty"
+
+      let r0  = head |>  if use_attention then lstm_with_attention >> !!rec_layer else !!rec_layer
+
+      let rn  = tail |> List.map (fun rec_block -> 
+        L.RecurrenceFrom(num_states=2,go_backwards=gobk) rec_block encoded_input)
+
+      (r0::rn) |> List.reduce ( >> )
+
+    history
+    |> (   embed 
+        >> stab_in 
+        >> rec_layers 
+        >> O.getOutput 0
+        >> stab_out 
+        >> proj_out 
+        >> L.Label("out_proj_out"))
+
+  decode
+
+let create_model_train (s2smodel:Node->Node->Node) input labels =
+  //The input to the decoder always starts with the special label sequence start token.
+  //Then, use the previous value of the label sequence (for training) or the output (for execution).
+  let past_labels = L.Delay(sentence_start) labels
+  s2smodel past_labels input
+
+let create_model_greedy s2smodel input =
+  let unfold = 
+    L.UnfoldFrom(  
+      (fun history -> s2smodel history input |> O.hardmax),
+      length_increase = length_increase,
+      until_predicate = (fun  (out:Node) -> O.slice [0] [sentence_end_index-1] [sentence_end_index] out))
+        //let mVal = 
+        //O.eq(out,sentence_end))) //python: lambda w:w[...,sentence_end_index]  - gets the indexed value at last dimension
+    
+  unfold sentence_start input
+
+let create_critetion_function model input labels = 
+  let postprocessed_labels = O.seq_slice(labels,1,0) // <s> A B C </s> --> A B C </s>
+  let postprocessed_labels = O.reconcile_dynamic_axis(postprocessed_labels,input)
+  let z = model input postprocessed_labels
+  let ce = O.cross_entropy_with_softmax(z, postprocessed_labels)
+  let errs = O.classification_error(z, postprocessed_labels)
+  ce,errs
+
+let train 
+  (train_reader:MinibatchSource) 
+  (valid_reader:MinibatchSource) 
+  vocab 
+  i2w 
+  s2smodel 
+  max_epochs 
+  epoch_size 
+  =
+  let inputAxis = new Axis("inputAxis", true)
+  let labelAxis = new Axis("labelAxis", true)
+  let x = Node.Input
+            (
+              D input_vocab_dim, 
+              dynamicAxes = [Axis.DefaultDynamicAxis(); Axis.DefaultBatchAxis()] //Sequence due to dynamic axis
+            )
+
+  //label sequence
+  let y = Node.Input
+            (
+              D label_vocab_dim, 
+              dynamicAxes = [Axis.DefaultDynamicAxis(); Axis.DefaultBatchAxis()] 
+            )
+
+  let model_train = create_model_train s2smodel x y
+  let ce,errs = create_critetion_function s2smodel x y
+
+  let model_greedy = create_model_greedy s2smodel x
+
+  model_greedy.Func.Save(@"C:\s\repodata\fscntk\s2s\fs.bin")
 
 
-let test_loss() =
-  let a = 193.00
-  let b = 3.5
-  let y = 200.0
-  let u = 1.0
+  let minibatch_size = 72
+  let lr = if use_attention then 0.001 else 0.005
 
-  let abVar = Node.Input (D 2, dynamicAxes=[Axis.DefaultBatchAxis()])
-  let yuVar = Node.Input(D 2, dynamicAxes=[Axis.DefaultBatchAxis()])
-  let ll = weibull_loss None abVar yuVar
-  let r = E.eval1 (dict[abVar.Var, [[a;b]] |> toValue; yuVar.Var, [[y;u]] |> toValue]) ll
+  //lr = C.learning_parameter_schedule_per_sample([lr]*2+[lr/2]*3+[lr/4], epoch_size),
+  //momentum = C.momentum_schedule(0.9366416204111472, minibatch_size=minibatch_size),
+  //gradient_clipping_threshold_per_sample=2.3,
+  //gradient_clipping_with_truncation=True)
 
-  printfn "%A" r
-  
-let activateDebug (ab:Node) = ab
+  let lr_per_sample = [[lr;lr]; [for _ in 1..3->lr/2.]; [for _ in 1..4->lr/4.]] |> List.collect yourself
+  let lr_per_minibatch = lr_per_sample |> List.mapi (fun i r -> (i+1), r * float minibatch_size)
+  let lr_schedule = schedule lr_per_minibatch epoch_size
 
-let activate2 (init_alpha:float) max_beta (scale_factor:float option) (ab:Node) =
-  let a = ab.[0..1]
-  let b = ab.[1..2]
+  let momentum = new TrainingParameterScheduleDouble(0.9366416204111472,uint32 minibatch_size)
+  let var_momentum = new TrainingParameterScheduleDouble(0.9999986111120757, uint32 minibatch_size) //from python code
 
-  let scale_factor = defaultArg scale_factor 1.0
+  //Training 8347832 parameters in 29 parameter tensors.
+  //model '.\model_att_True.cmf.0'
 
-  let a = a .* scale_factor
-  let b = b .* scale_factor
-  let a = O.exp(a) .* init_alpha
 
-  let b = 
-    if max_beta > 1.05 then 
-      let _shift = log(max_beta - (1.0 - epsilon))
-      b - _shift
-    else
-      b
-   
-  let b = O.sigmod(b) .* max_beta
-  
-  //C.Splice(varVector [a.Var; b.Var], new Axis(-1)) |> F
-  O.splice [a;b]
-
-let activate1 (ab:Node) = 
-  let a = ab.[0..1]
-  let b = ab.[1..2]
-  
-  let a = O.exp(a)
-  let b = O.softplus(b)
-  
-  O.splice [a;b]
-
-let activate2_test () =
-  let a = -0.0687800273 
-  let b = -0.0426109992 
-  let v = [[a;b]] |> toValue
-  let ab = Node.Input(D 2, dynamicAxes=[Axis.DefaultBatchAxis()])
-  let m = activate2 init_alpha max_beta (Some scale_factor) ab
-  let o = m |> E.eval1 (dict[ab.Var,v])
-  let a' = o.[0].[0]
-  let b' = o.[0].[1]
-  
-  printfn "a':%f, b':%f" a' b'
-
-let model_func = 
-  let initState = new Constant(!> [| NDShape.InferredDimension |], dataType, 0.0) :> Variable |> V 
-  let cell =  L.GRU2(D 20,activation=Activation.Tanh, enable_self_stabilization=false)
-  L.Recurrence([initState]) cell       //recurrence layer needs a step function cell, GRU here
-  >> O.getOutput 0
-  >> O.last
-  //>> L.Dropout(0.3)
-  >> L.Dense(D 2)
-  //>> activate1
-  //>> activate4
-  //>> activate3 max_beta
-  //>> L.Activation Activation.
-  >> activate2 init_alpha max_beta (Some scale_factor)
-  //>> activate2 1.0 2.0 None
-
-let mb_size = 200
-let epoch_size = train_x.Length
-let clip_loss = (Some 1e-6)
-
-module Learners =
   let options = new AdditionalLearningOptions()
-  options.gradientClippingThresholdPerSample <- 1e10
+  options.gradientClippingThresholdPerSample <- 2.3
   options.gradientClippingWithTruncation <- true
-  //options.l1RegularizationWeight <- 1e-10
 
-  let adam model = 
-    //let lr = constSchedule (0.01 / (float mb_size)) 
-    let lr = new TrainingParameterScheduleDouble(0.001,1u)
-    //let lrs = schedule [40, 0.001 / (float mb_size); 0, 0.0001 / (float mb_size) ]  mb_size
-    let iter = epoch_size/mb_size
-    let lrs = schedule [100*iter, 0.01; 50*iter, 0.01; 1, 0.00001]  mb_size
-    let momentum = 0.9 //equivalent to beta1 in adam paper
-    C.AdamLearner(
-                      O.parms model |> parmVector
-                      ,lr
-                      ,new TrainingParameterScheduleDouble(momentum)                      
-                      ,true                                     //should be exposed by CNTK C# API as C.DefaultUnitGainValue()
-                      ,constSchedule 0.9999986111120757         //from python code, beta2 from adam paper
-                      ,epsilon                                  //python defaults to 1e-8
-                      ,false                                     //from python code
-                      ,options
-                      )
+  let learner = C.FSAdaGradLearner(
+                      O.parms model_train |> parmVector ,
+                      lr_schedule,
+                      momentum,
+                      true, //should be exposed by CNTK C# API as C.DefaultUnitGainValue()
+                      var_momentum, //not sure what should be the default
+                      options)
+  
+  let trainer = C.CreateTrainer(
+                      model_train.Func,
+                      ce.Func, 
+                      errs.Func,
+                      lrnVector [learner])
 
-  let fsadagrad model = 
-    //let lr = constSchedule (0.01 / (float mb_size)) 
-    let lr = new TrainingParameterScheduleDouble(0.0001,1u)
-    let iter = epoch_size/mb_size
-    let lrs = schedule [2*iter, 0.0001; 1, 0.00001]  mb_size
-
-
-    C.FSAdaGradLearner(
-                      O.parms model |> parmVector
-                      ,lr
-                      ,constSchedule 0.9
-                      ,true
-                      ,constSchedule 0.9999986111120757
-                      //,options
-                      )
-
-
-  let adadelta model = 
-    //let lr = constSchedule (0.01 / (float mb_size)) 
-    let lr = new TrainingParameterScheduleDouble(0.0000001,1u)
-    let iter = epoch_size/mb_size
-    let lrs = schedule [1*iter, 0.001; 1, 0.0001]  mb_size
-
-
-    C.AdaDeltaLearner(
-                      O.parms model |> parmVector
-                      ,lr
-                      ,0.99
-                      ,1e-6
-                      ,options
-                      )
-
-let createTrainer (model:Node) =
-
-  let loglik_loss = weibull_loss clip_loss model input_y
-  //let loglik_loss = -(weibull_loglik_discrete2 None model input_y)
-  //let eval_f = weibull_loglik_discrete model input_y |> O.reduce_max [0]
-
-  loglik_loss.Func.Save(@"D:\repodata\fscntk\wtte\loglik_loss.bin")
-  //eval_f.Func.Save(@"D:\repodata\fscntk\wtte\eval_f.bin")
-  model.Func.Save(@"D:\repodata\fscntk\wtte\wtte.bin")
-
-
-  let parms = O.parms model 
+  let mutable total_samples = 0
+  let mutable mbs = 0
+  let eval_freq = 100
+  let parms = O.parms model_train 
   let totalParms = parms |> Seq.map (fun p -> p.Shape.TotalSize) |> Seq.sum
   printfn "Training %d parameters in %d parameter tensors" totalParms (Seq.length parms)
-  printfn "detail"
-  parms |> Seq.iter(fun p-> printfn "%s, %A, %d" p.Name (p.Shape.Dimensions) p.Shape.TotalSize)
 
-  //let sq = O.squared_error (model,input_y)
-  
-  let learner = Learners.adam model
+  let strInput = train_reader.StreamInfo(sInput)
+  let strLabels  = train_reader.StreamInfo(sLabels)
 
-  let trainer = C.CreateTrainer(
-                      model.Func,
-                      loglik_loss.Func, 
-                      //sq.Func,
-                      null,
-                      lrnVector [learner])
-  trainer,learner
+  for epoch in 1 .. max_epochs do
+    while total_samples < (epoch+1) * epoch_size do
+      let mb_train = train_reader.GetNextMinibatch(uint32 minibatch_size, device)
+      let args = idict [x.Var,mb_train.[strInput]; y.Var,mb_train.[strLabels]]
+      let r = trainer.TrainMinibatch(args,device)
 
+      if mbs % eval_freq = 0 then
+        let mb_valid = valid_reader.GetNextMinibatch(1u)
+        let inpStr = mb_valid.[strInput]
+        let e = E.eval inpStr model_greedy
+        //vizualization code to be added later
+        ()
 
-let trainModelTo (model:Node) (trainer:Trainer,learner:Learner) endEpoch =
-  let x_batches = train_x |> Array.chunkBySize mb_size
-  let y_batches = train_y |> Array.chunkBySize mb_size
+      total_samples <- total_samples + (int mb_train.[strLabels].numberOfSamples)
+      mbs <- mbs + 1
+      
+    let model_path = sprintf @"D:\repodata\fscntk\s2s\model_%d.cmf" epoch
+    printf "Saving final model to '%s'" model_path
+    model_train.Func.Save(model_path)
+    printf "%d epochs complete." max_epochs
 
-  let rec loop epoch mb =
-    let mb = mb % x_batches.Length
-    let epoch = if mb = 0 then epoch + 1 else epoch
-    let x = x_batches.[mb]
-    let y = y_batches.[mb]
+let do_train() =
+  train train_reader valid_reader vocab' () create_model 1 25000
 
-    let xSeq = x |> Array.map((Array.collect yourself)>>Array.toSeq)
-    let xVal = Value.CreateBatchOfSequences(!-- (D feature_dim), xSeq, device)
-    
-    let ySeq = y |> Array.collect yourself |> Array.toSeq
-    let yVal = Value.CreateBatch(!--(D 2), ySeq, device)
-
-    //  //debugging
-    //let evalInput = dict [input_x.Var,xVal; input_y.Var, yVal]
-    //let m,outVar = trainer.LossFunction(),trainer.LossFunction().Output
-    //let output = idict[outVar, (null:Value)]
-    //m.Evaluate(evalInput,output,device)
-    //let ePreds = output.[outVar]
-    //let d = ePreds.GetDenseData<float32>(outVar) |> Seq.map Seq.toArray |> Seq.toArray
-    //printfn "%A" d
-
-    let input  = dict [input_x.Var, xVal; input_y.Var, yVal]
-    let r = trainer.TrainMinibatch(input,false,device)
-    let loss = trainer.PreviousMinibatchLossAverage()
-    let eval = 0.0//trainer.PreviousMinibatchEvaluationAverage()
-    let rate = learner.LearningRate()
-    printfn "epoch: %d; mb=%d; loss=%f; eva=%f; rate=%f" epoch mb loss eval rate
-
-    //let w = E.weights model
-    //w |> Array.iter (printfn "%A")
-
-    if epoch < endEpoch && not(Double.IsNaN(loss))then
-      loop epoch (mb + 1)
-  loop 0 0
-
-let testModel (model:Node) =
-  let xSeq = test_x |> Array.map((Array.collect yourself)>>Array.toSeq)
-  let xVal = Value.CreateBatchOfSequences(!-- (D feature_dim), xSeq, device)
-  let ySeq = test_y |> Array.collect yourself |> Array.toSeq |> Seq.map dmap
-  let yVal = Value.CreateBatch(!--(D 2), ySeq, device)
-  let m,outVar = model,model.Func.Output
-  let evalInput = dict [input_x.Var,xVal]
-  let output = idict[outVar, (null:Value)]
-  m.Func.Evaluate(evalInput,output,device)
-  let ePreds = output.[outVar]
-  let d = ePreds.GetDenseData<float32>(outVar) |> Seq.map Seq.toArray |> Seq.toArray
-  let loss = weibull_loss clip_loss m input_y
-  let evalLoss = E.eval1 (dict[input_x.Var, xVal; input_y.Var, yVal]) loss
-  let d2 = Array.zip3 d (evalLoss.[0]) test_y
-
-  printfn "%A" d2
-  printfn "test loss %f" (Seq.average evalLoss.[0])
-
-let checkLoss() =
-  let r = ([|107.161415f; 0.987768292f|], 5.73641109f, [|112.0; 1.0|])
-  let ab,loss,yu = r
-  let a = ab.[0] |> float
-  let b = ab.[1] |> float
-  let y = yu.[0] 
-  let u = yu.[1] 
-
-  let hazard0 = Math.Pow( (y + epsilon) / a , b )
-  let hazard1 = Math.Pow ( (y + 1.0) / a , b)
- 
-  let llh = u * log(exp(hazard1 - hazard0) - (1.0 - epsilon)) - hazard1
-  llh
-
-let model = model_func input_x
-let t,l = createTrainer model
-trainModelTo model (t,l) 2
-(*
-trainModelTo (t,l) 3
-trainModelTo model (t,l) 100 
-
-let w = E.weights model
-w |> Array.iter (printfn "%A")
-
-[|[|107.161415f; 0.987768292f|]; [|103.427597f; 0.921889961f|];
-  [|108.222733f; 0.919031441f|]; [|100.463837f; 0.931045711f|];
-  test loss 5.397783, 5.414418
-testModel model
--
-
-*)
-
+do_train()

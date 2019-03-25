@@ -430,10 +430,8 @@ module Layers_Sequence =
         let out = func prev_out_vars x
 
         //loop - replace placeholders with step function output to close the loop
-        let out_vars = 
-          List.zip out_vars_fwd (O.uncombine out)
-          |> List.map (fun (fw,ac) -> 
-            ac.Func.ReplacePlaceholders(idict[fw.Var,ac.Var]) |> F )
+        List.zip out_vars_fwd (O.uncombine out)
+        |> List.iter (fun (fw,ac) -> ac.Func.ReplacePlaceholders(idict[fw.Var,ac.Var]) |> ignore)
 
         //return step function output
         out
@@ -482,7 +480,8 @@ module Layers_Sequence =
 
     static member UnfoldFrom
       (
-       ?until_predicate:(Node->Node),
+       generator_function   : Node->Node,
+       ?until_predicate     : Node->Node,
        ?length_increase,     
        ?name
       )                            
@@ -490,7 +489,7 @@ module Layers_Sequence =
       let length_increase = defaultArg length_increase 1.0
       let name = defaultArg name ""
 
-      fun generator_function initial_state dynamic_axes_like ->
+      fun initial_state dynamic_axes_like ->
         
         let out_axis = 
           if length_increase = 1.0 then
@@ -520,23 +519,48 @@ module Layers_Sequence =
             O.uncombine z |> List.tail |> O.combine
  
         //loop - replace placeholders with generator func output to close the loop
-        let out_vars = 
-          List.zip out_vars_fwd (O.uncombine newState)
-          |> List.map (fun (fw,ac) -> 
+        List.zip out_vars_fwd (O.uncombine newState)
+        |> List.iter (fun (fw,ac) -> 
             let ac = O.reconcile_dynamic_axis(ac,out_axis)
-            ac.Func.ReplacePlaceholders(idict[fw.Var,ac.Var]) |> F )
+            ac.Func.ReplacePlaceholders(idict[fw.Var,ac.Var]) |> ignore)
 
         match until_predicate with
         | None                  -> output
         | Some until_predicate  ->
             let valid_frames =
-                L.Recurrence(initial_states=[Node.Scalar 1.0])                   // initial state
-                  (fun (h:Node) (x:Node) -> (1.0 - O.seq_past_value(x,1)) * h) //step function: stops when input returns a 1
+                let cVal = Node.Scalar 1.
+                L.Recurrence(initial_states=[cVal])                    // initial state
+                  (fun (h:Node) (x:Node) -> (1.0 - O.seq_past_value(x,1)) .* h) //step function: stops when input returns a 1
                   (until_predicate output)                                     //input: zeros followed by a 1 (in most cases)                      
 
             let output = O.seq_gather(output, valid_frames, name="valid_output")
             output
         
+    static member PastValueWindow 
+        (
+            window_size  : int,
+            axis         : Axis,
+            go_backwards : bool
+        )      
+        =
+
+        let nth(input,offset) =
+            let final_f, offset =
+                if go_backwards then
+                    O.seq_first, -offset
+                else
+                    O.seq_last, offset
+            final_f(L.Delay(time_step=offset)(input))
 
 
-        
+        fun (x:Node) ->
+            let ones_like_input  = O.seq_broadcast_as(Node.Scalar 1., x)
+
+            let last_values = [for t in 0..window_size-1 -> nth(x,t)]
+            let last_valids = [for t in 0..window_size-1 -> nth(ones_like_input,t)]
+
+            let value = O.splice (last_values, axis=axis) //|> O.as_composite "past_value"
+            let valid = O.splice (last_valids, axis=axis) //|> O.as_composite "past_value_mask"
+
+            let ret = O.combine [value;valid] 
+            O.as_composite "PastValue" ret
