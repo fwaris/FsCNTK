@@ -556,8 +556,8 @@ module Layers_Sequence =
         fun (x:Node) ->
             let ones_like_input  = O.seq_broadcast_as(Node.Scalar 1., x)
 
-            let last_values = [for t in 0..window_size-1 -> nth(x,t)]
-            let last_valids = [for t in 0..window_size-1 -> nth(ones_like_input,t)]
+            let last_values = [for t in 1..window_size -> nth(x,t)]
+            let last_valids = [for t in 1..window_size -> nth(ones_like_input,t)]
 
             let value = O.splice (last_values, axis=axis) //|> O.as_composite "past_value"
             let valid = O.splice (last_valids, axis=axis) //|> O.as_composite "past_value_mask"

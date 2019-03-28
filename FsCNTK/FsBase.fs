@@ -225,7 +225,7 @@ module FsBase =
 
       static member private _const (c:float) =  Constant.Scalar(dataType, c, device)
       static member Scalar (c:float) = Node._const c :> Variable |> V
-      static member Const (c:float) = new Constant( !-- (D 1), dataType, c) :> Variable |> V 
+      static member Const (c:float) = new Constant( !> [| NDShape.InferredDimension |] , dataType, c) :> Variable |> V 
    
       static member ( ./ ) (n:Node,d:float) = C.ElementDivide(n.Var, Node._const d) |> F
       static member ( ./ ) (n:Node,d:Node) = C.ElementDivide(n.Var, d.Var) |> F

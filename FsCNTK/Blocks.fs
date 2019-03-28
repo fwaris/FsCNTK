@@ -24,14 +24,14 @@ module Blocks =
             let steepness = defaultArg steepness 4
             let enable_self_stabilization = defaultArg enable_self_stabilization true
             let name = defaultArg name ""
+            let init_parm = log(exp(float steepness) - 1.0) / (float steepness)
+            let param = Node.Parm(Ds[],init=init_parm,name="alpha")
+            let param = if steepness = 1 then param else (float steepness) .* param 
+            let beta = O.softplus param 
 
             fun (x:Node) ->
               if not enable_self_stabilization then x
               else
-                let init_parm = Math.Log(Math.Exp(float steepness) - 1.0) / (float steepness)
-                let param = Node.Parm(Ds[],init=init_parm,name="alpha")
-                let param = if steepness = 1 then param else (float steepness) .* param 
-                let beta = O.softplus param 
                 let r = beta .* x
                 r
 

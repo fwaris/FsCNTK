@@ -7,11 +7,10 @@ open Layers_Dropout
 open CNTK
 open System.IO
 open FsCNTK.FsBase
-open Layers_Recurrence
+open Layers_Sequence
 open System.Collections.Generic
 open Probability
 open System
-open FsCNTK.Layers_Recurrence
 
 type CNTKLib = C
 Layers.trace := true

@@ -65,7 +65,7 @@ let valid_reader = create_reader validation true
 let hidden_dim = 512
 let num_layers = 2
 let attention_dim = 128
-let attention_span = 20
+let attention_span = 2
 let attention_axis = new Axis(-3)
 let use_attention = true
 let use_embedding = true
@@ -163,7 +163,7 @@ let create_model =
 let create_model_train (s2smodel:Node->Node->Node) input labels =
   //The input to the decoder always starts with the special label sequence start token.
   //Then, use the previous value of the label sequence (for training) or the output (for execution).
-  let past_labels = L.Delay(sentence_start) labels
+  let past_labels = L.Delay(initial_state=sentence_start) labels
   s2smodel past_labels input
 
 let create_model_greedy s2smodel input =
@@ -171,9 +171,7 @@ let create_model_greedy s2smodel input =
     L.UnfoldFrom(  
       (fun history -> s2smodel history input |> O.hardmax),
       length_increase = length_increase,
-      until_predicate = (fun  (out:Node) -> O.slice [0] [sentence_end_index-1] [sentence_end_index] out))
-        //let mVal = 
-        //O.eq(out,sentence_end))) //python: lambda w:w[...,sentence_end_index]  - gets the indexed value at last dimension
+      until_predicate = O.slice [0] [sentence_end_index] [sentence_end_index+1])
     
   unfold sentence_start input
 
@@ -183,7 +181,7 @@ let create_critetion_function model input labels =
   let z = model input postprocessed_labels
   let ce = O.cross_entropy_with_softmax(z, postprocessed_labels)
   let errs = O.classification_error(z, postprocessed_labels)
-  ce,errs
+  z,ce,errs
 
 let train 
   (train_reader:MinibatchSource) 
@@ -209,8 +207,8 @@ let train
               dynamicAxes = [Axis.DefaultDynamicAxis(); Axis.DefaultBatchAxis()] 
             )
 
-  let model_train = create_model_train s2smodel x y
-  let ce,errs = create_critetion_function s2smodel x y
+  let model_train = create_model_train s2smodel 
+  let z,ce,errs = create_critetion_function model_train x y
 
   let model_greedy = create_model_greedy s2smodel x
 
@@ -241,7 +239,7 @@ let train
   options.gradientClippingWithTruncation <- true
 
   let learner = C.FSAdaGradLearner(
-                      O.parms model_train |> parmVector ,
+                      O.parms z |> parmVector ,
                       lr_schedule,
                       momentum,
                       true, //should be exposed by CNTK C# API as C.DefaultUnitGainValue()
@@ -249,7 +247,7 @@ let train
                       options)
   
   let trainer = C.CreateTrainer(
-                      model_train.Func,
+                      null,
                       ce.Func, 
                       errs.Func,
                       lrnVector [learner])
@@ -257,7 +255,7 @@ let train
   let mutable total_samples = 0
   let mutable mbs = 0
   let eval_freq = 100
-  let parms = O.parms model_train 
+  let parms = O.parms z 
   let totalParms = parms |> Seq.map (fun p -> p.Shape.TotalSize) |> Seq.sum
   printfn "Training %d parameters in %d parameter tensors" totalParms (Seq.length parms)
 
@@ -282,7 +280,7 @@ let train
       
     let model_path = sprintf @"D:\repodata\fscntk\s2s\model_%d.cmf" epoch
     printf "Saving final model to '%s'" model_path
-    model_train.Func.Save(model_path)
+    model_greedy.Func.Save(model_path)
     printf "%d epochs complete." max_epochs
 
 let do_train() =
