@@ -68,6 +68,9 @@ module Layers_Sequence =
       fun (x:Node) -> L.delay (x,initial_state,time_step,name)
 
 
+   //helper function that returns
+   //parameters and other needed info
+   //for the different recurrent cell types (e.g. lstm, gru, etc.)
     static member private RecurrentBlock
       (
         cellType,
@@ -75,8 +78,7 @@ module Layers_Sequence =
         cell_shape,
         enable_self_stabilization,
         (init:CNTKDictionary),
-        (init_bias:float),
-        (x:Node)
+        (init_bias:float)
       )
       =      
       let has_projection,cell_shape = 
@@ -116,8 +118,10 @@ module Layers_Sequence =
       //let Sct = L.Stabilizer(enable_self_stabilization=enable_self_stabilization, name="c_stabilizer") //for peepholes
       let Sht = B.Stabilizer(enable_self_stabilization=enable_self_stabilization, name="P_stabilizer")
 
+      let _INFERRED = D NDShape.InferredDimension
+
       let b = Node.Parm(               cell_shape_stacked,   init=init_bias, name="b")
-      let W = Node.Parm(   O.shape x + cell_shape_stacked,   init=init, name="W")
+      let W = Node.Parm(   _INFERRED + cell_shape_stacked,   init=init, name="W")
       let H = Node.Parm(   out_shape + cell_shape_stacked_H, init=init, name="H")
 
       let H1 = 
@@ -161,6 +165,17 @@ module Layers_Sequence =
       let enable_self_stabilization = defaultArg enable_self_stabilization false
       let name = defaultArg name ""
 
+      let rp =
+        L.RecurrentBlock
+            (
+                Cell.LSTM, 
+                out_shape,
+                defaultArg cell_shape Shape.Unknown,
+                enable_self_stabilization,
+                init,
+                init_bias
+            )
+
 
       //Great reference: http://colah.github.io/posts/2015-08-Understanding-LSTMs/
       let lstm states (x:Node)   =
@@ -170,17 +185,6 @@ module Layers_Sequence =
           | a::b::_   -> a,b
           | [a]       -> a,a
 
-        let rp =
-            L.RecurrentBlock
-              (
-                  Cell.LSTM, 
-                  out_shape,
-                  defaultArg cell_shape Shape.Unknown,
-                  enable_self_stabilization,
-                  init,
-                  init_bias,
-                  x
-              )
 
         let dhs = rp.Sdh(dh) //stabilized previous output 
         //let dcs = rp.Sdc(dc) //stabilized previous cell state only needed if peepholes are used
@@ -212,12 +216,7 @@ module Layers_Sequence =
 
         O.combine [h;c]
 
-      let h_shape = out_shape
-      let c_shape = defaultArg cell_shape out_shape
-
-      //step_function
       lstm
-      //[h_shape; c_shape], lstm 
 
     static member GRU
       (
@@ -237,19 +236,18 @@ module Layers_Sequence =
       let enable_self_stabilization = defaultArg enable_self_stabilization false
       let name = defaultArg name ""
 
-      let gru dh (x:Node)  =
+      let rp =
+        L.RecurrentBlock
+            (
+                Cell.GRU, 
+                out_shape,
+                defaultArg cell_shape Shape.Unknown,
+                enable_self_stabilization,
+                init,
+                init_bias
+            )
 
-        let rp =
-            L.RecurrentBlock
-              (
-                  Cell.GRU, 
-                  out_shape,
-                  defaultArg cell_shape Shape.Unknown,
-                  enable_self_stabilization,
-                  init,
-                  init_bias,
-                  x
-              )
+      let gru dh (x:Node)  =
 
         let dhs = rp.Sdh(dh) //previous value stabilized
         let projx3 = rp.b + (x * rp.W) 
@@ -279,8 +277,6 @@ module Layers_Sequence =
 
         h
       
-      //step_function
-      //[out_shape],gru
       gru
 
     //not sure about the correctednes of the python derived
@@ -303,9 +299,7 @@ module Layers_Sequence =
       let enable_self_stabilization = defaultArg enable_self_stabilization false
       let name = defaultArg name ""
 
-      let gru dh (x:Node)  =
-
-        let rp =
+      let rp =
             L.RecurrentBlock
               (
                   Cell.GRU, 
@@ -313,9 +307,10 @@ module Layers_Sequence =
                   defaultArg cell_shape Shape.Unknown,
                   enable_self_stabilization,
                   init,
-                  init_bias,
-                  x
+                  init_bias
               )
+
+      let gru dh (x:Node)  =
 
         let dhs = rp.Sdh(dh) //previous value stabilized
         let projx3 = rp.b + (x * rp.W) 
@@ -345,8 +340,6 @@ module Layers_Sequence =
 
         h
       
-      //step_function
-      //[out_shape],gru
       gru
 
     static member RnnStep
@@ -367,9 +360,7 @@ module Layers_Sequence =
       let enable_self_stabilization = defaultArg enable_self_stabilization false
       let name = defaultArg name ""
 
-      let rnn_step dh (x:Node) =
-
-        let rp =
+      let rp =
             L.RecurrentBlock
               (
                   Cell.RNNStep, 
@@ -377,9 +368,11 @@ module Layers_Sequence =
                   defaultArg cell_shape Shape.Unknown,
                   enable_self_stabilization,
                   init,
-                  init_bias,
-                  x
+                  init_bias
               ) 
+
+      let rnn_step dh (x:Node) =
+
         let dhs = rp.Sdh(dh)
 
         let ht = L.Activation activation (rp.b + (x * rp.W) + (dhs * rp.H))
@@ -387,11 +380,11 @@ module Layers_Sequence =
 
         h
 
-      //[out_shape],rnn_step
       rnn_step
 
     static member RecurrenceFrom 
       (
+       step_function : StepFunction,
        num_states : int, //number of states used by the step function, >= 1
        ?go_backwards,
        ?name
@@ -400,20 +393,15 @@ module Layers_Sequence =
       let go_backwards = defaultArg  go_backwards false //'false' means get past value - somewhat counter intuitive but matches python
       let name = defaultArg name ""
 
-      fun (func:StepFunction) states (x:Node) ->
-
-        let time_step = if go_backwards then -1 else +1
+      fun states (x:Node) ->
 
         let states = O.uncombine states
 
         let x = O.getOutput 0 x // peel off the first output (as RNN outputs have combined output/states)
-        //let cVal = new Constant(!> [| NDShape.InferredDimension |](*!>[|1|]*), dataType, 0.0) :> Variable |> V 
-        ////fix the states to match the number of expected states
-        //let states1 = [cVal; cVal]
-        //let states = [states.[0]; states.[0]]
+
         let states = 
           match List.length states, num_states with
-          | 1,x when states.[0].Var.IsConstant -> [for i in 1..x -> states.[0]]
+          | 1,x when states.[0].Var.IsConstant -> [for i in 1..x -> states.[0]] //copy to match number of states needed
           | a,b when a = b -> states
           | _  -> failwith "number of input states should match what is required by step function or be a constant"
 
@@ -421,13 +409,14 @@ module Layers_Sequence =
         let out_vars_fwd = states |> List.map (fun s -> Node.Placeholder(O.shape s,x.Var.DynamicAxes))
 
         //placeholders run through the delay function for prior (or future) values
+        let time_step = if go_backwards then -1 else +1
         let prev_out_vars = 
           List.zip out_vars_fwd states 
           |> List.map (fun (ph,st) ->  L.delay(ph,Some st,time_step,""))
           |> O.combine
 
         //call the step function with delayed values
-        let out = func prev_out_vars x
+        let out = step_function prev_out_vars x
 
         //loop - replace placeholders with step function output to close the loop
         List.zip out_vars_fwd (O.uncombine out)
@@ -438,41 +427,41 @@ module Layers_Sequence =
 
     static member Recurrence
       (
+       step_function : StepFunction,
        initial_states,
        ?go_backwards,
        ?name
       )                            
       =
       if List.isEmpty initial_states then failwithf "Recurrence: init_states list cannot be empty. The number of initial states should match the number expected by the step function"
-
-      fun (func:Node->Node->Node) (x:Node) -> 
-        let go_backwards = defaultArg  go_backwards false
-        let name = defaultArg name ""
-        //let state_shapes,_ = step_function
+      let go_backwards = defaultArg  go_backwards false
+      let name = defaultArg name ""
+     //let state_shapes,_ = step_function
       
-        let recurrence_from = L.RecurrenceFrom(List.length initial_states, go_backwards=go_backwards,name=name) func
+      let recurrence_from = L.RecurrenceFrom(step_function, List.length initial_states, go_backwards=go_backwards,name=name) 
 
+      fun (x:Node) -> 
         if !Layers.trace then printfn ">> Recurrence with %A" (initial_states |> List.map (O.shape>>dims))
         recurrence_from (O.combine initial_states) x
 
     static member Fold
       (
+       folder_function : StepFunction,
        initial_states,
        ?go_backwards,
        ?name
       )                            
       =
+      let go_backwards = defaultArg  go_backwards false
+      let name = defaultArg name ""
+      let recurrence = L.Recurrence(
+                            folder_function,
+                            initial_states,
+                            go_backwards=go_backwards, 
+                            name=name) 
 
-      fun  (func:Node->Node->Node) (x:Node) -> 
-        let go_backwards = defaultArg  go_backwards false
-        let name = defaultArg name ""
+      fun (x:Node) -> 
         //let state_shapes,_ = step_function
-
-        let recurrence = L.Recurrence(
-                              initial_states,
-                              go_backwards=go_backwards, 
-                              name=name) 
-                            func
 
         let get_final = if go_backwards then O.seq_first else O.seq_last
         
@@ -504,7 +493,7 @@ module Layers_Sequence =
         //placeholders run through the delay function for prior values
         let prev_out_vars = 
           List.zip out_vars_fwd states 
-          |> List.map (fun (ph,st) ->  L.delay(ph,Some st,1,""))
+          |> List.map (fun (ph,st) ->  L.delay(ph,Some st,1,"unfold_prev_state"))
           |> O.combine
 
         //generator function emits output and optionally new state
@@ -529,9 +518,10 @@ module Layers_Sequence =
         | Some until_predicate  ->
             let valid_frames =
                 let cVal = Node.Scalar 1.
-                L.Recurrence(initial_states=[cVal])                    // initial state
-                  (fun (h:Node) (x:Node) -> (1.0 - O.seq_past_value(x,1)) .* h) //step function: stops when input returns a 1
-                  (until_predicate output)                                     //input: zeros followed by a 1 (in most cases)                      
+                L.Recurrence(
+                    (fun (h:Node) (x:Node) -> (1.0 - O.seq_past_value(x,1)) .* h), //step function: stops when input returns a 1
+                    initial_states=[cVal])                                         // initial state
+                    (until_predicate output)                                       //input: zeros followed by a 1 (in most cases)                      
 
             let output = O.seq_gather(output, valid_frames, name="valid_output")
             output

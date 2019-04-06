@@ -36,24 +36,12 @@ module Layers_Dense =
             | _     , Some r    -> r
 
         let output_rank = len output_shape
+        let input_shape = D NDShape.InferredDimension * (defaultArg input_rank  1)
+        let init_weight = B._initializer_with_rank (init, output_rank=output_rank) 
+        let W = new Parameter(!--(input_shape + output_shape),dataType,init_weight,device,"W")
+        let b = if bias then new Parameter(!--output_shape,dataType,init_bias,device,"b") else null
 
         fun (x:Node) ->
-
-          
-          //python uses late binding so shape is inferred
-
-          //let input_shape = D NDShape.InferredDimension * (match input_rank with None -> 1 | Some r -> r)
-
-          //here we can just use the shape given
-
-          let input_shape = D NDShape.InferredDimension * (defaultArg input_rank  1)
-
-          let init_weight = B._initializer_with_rank (init, output_rank=output_rank) 
-          //let test_input_shape = D NDShape.InferredDimension
-          let W = new Parameter(!--(input_shape + output_shape),dataType,init_weight,device,"W")
-          //let W = new Parameter(!--(test_input_shape + output_shape),dataType,init_weight,device,"W")
-          let b = if bias then new Parameter(!--output_shape,dataType,init_bias,device,"b") else null
-
           let r = C.Times(W,x.Var,uint32 output_rank, infer_input_rank_to_map)
           let r = if bias then C.Plus(!>r,  b ) else r
           let r = addActivation (F r) activation

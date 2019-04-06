@@ -97,23 +97,23 @@ let create_model =
 
   //recurrent layer and cell creation helpers that encapsulate defaults
   let cVal = new Constant(!> [| NDShape.InferredDimension |], dataType, 0.1) :> Variable |> V 
-  let rec_layer() = L.Recurrence(initial_states=[cVal;cVal],go_backwards=gobk)
+  let rec_layer f_step = L.Recurrence(f_step, initial_states=[cVal;cVal],go_backwards=gobk)
   let lstmCell() :StepFunction = L.LSTM(D hidden_dim, enable_self_stabilization=true)
 
   let inline ( !! ) f = f() //invoke a parameterless function (used to avoid too many braces)
 
   let LastRecurrence gb = 
     if not use_attention then 
-      L.Fold (initial_states=[cVal;cVal], go_backwards=gb)
+      (fun f_step -> L.Fold (f_step, initial_states=[cVal;cVal], go_backwards=gb))
     else 
-     !!rec_layer
+     rec_layer
 
   //encoder
   let encode =
     seq {
       yield embed
       yield B.Stabilizer(enable_self_stabilization=true)
-      yield! seq {for i in 0 .. num_layers-1 -> !!rec_layer !!lstmCell}
+      yield! seq {for i in 0 .. num_layers-1 -> rec_layer !!lstmCell}
       yield LastRecurrence gobk !!lstmCell
       yield O.mapOutputsZip [L.Label("encoded_h"); L.Label("encoded_c")] //lstm h and c outputs
     }
@@ -141,10 +141,10 @@ let create_model =
     let rec_layers = 
       let head,tail = match rec_blocks with head::tail->head,tail | _ -> failwith "list empty"
 
-      let r0  = head |>  if use_attention then lstm_with_attention >> !!rec_layer else !!rec_layer
+      let r0  = head |>  if use_attention then lstm_with_attention >> rec_layer else rec_layer
 
       let rn  = tail |> List.map (fun rec_block -> 
-        L.RecurrenceFrom(num_states=2,go_backwards=gobk) rec_block encoded_input)
+        L.RecurrenceFrom(rec_block, num_states=2,go_backwards=gobk) encoded_input)
 
       (r0::rn) |> List.reduce ( >> )
 
@@ -191,19 +191,22 @@ let train
   max_epochs 
   epoch_size 
   =
-  let inputAxis = new Axis("inputAxis", true)
-  let labelAxis = new Axis("labelAxis", true)
+    //*** need separate dynamic axes as the two sequences 
+    //are of different lengths
+  let inputAxis = Axis.NewUniqueDynamicAxis("inputAxis")
+  let labelAxis = Axis.NewUniqueDynamicAxis("labelAxis")
+
   let x = Node.Input
             (
               D input_vocab_dim, 
-              dynamicAxes = [Axis.DefaultDynamicAxis(); Axis.DefaultBatchAxis()] //Sequence due to dynamic axis
+              dynamicAxes = [inputAxis; Axis.DefaultBatchAxis()] //Sequence due to dynamic axis
             )
 
   //label sequence
   let y = Node.Input
             (
               D label_vocab_dim, 
-              dynamicAxes = [Axis.DefaultDynamicAxis(); Axis.DefaultBatchAxis()] 
+              dynamicAxes = [labelAxis; Axis.DefaultBatchAxis()] 
             )
 
   let model_train = create_model_train s2smodel 
@@ -211,27 +214,12 @@ let train
 
   let model_greedy = create_model_greedy s2smodel x
 
-  model_greedy.Func.Save(@"C:\s\repodata\fscntk\s2s\fs.bin")
-
+  model_greedy.Func.Save(@"C:\s\repodata\fscntk\cntk_204\fs.bin")
 
   let minibatch_size = 72
   let lr = if use_attention then 0.001 else 0.005
 
-  //lr = C.learning_parameter_schedule_per_sample([lr]*2+[lr/2]*3+[lr/4], epoch_size),
-  //momentum = C.momentum_schedule(0.9366416204111472, minibatch_size=minibatch_size),
-  //gradient_clipping_threshold_per_sample=2.3,
-  //gradient_clipping_with_truncation=True)
-
-  let lr_per_sample = [[lr;lr]; [for _ in 1..3->lr/2.]; [for _ in 1..4->lr/4.]] |> List.collect yourself
-  let lr_per_minibatch = lr_per_sample |> List.mapi (fun i r -> (i+1), r * float minibatch_size)
-  let lr_schedule = schedule lr_per_minibatch epoch_size
-
-  let momentum = new TrainingParameterScheduleDouble(0.9366416204111472,uint32 minibatch_size)
-  let var_momentum = new TrainingParameterScheduleDouble(0.9999986111120757, uint32 minibatch_size) //from python code
-
-  //Training 8347832 parameters in 29 parameter tensors.
-  //model '.\model_att_True.cmf.0'
-
+  let lr_per_sample = [lr; lr; lr/2.; lr/2.; lr/2.; lr/4.]
 
   let options = new AdditionalLearningOptions()
   options.gradientClippingThresholdPerSample <- 2.3
@@ -239,10 +227,10 @@ let train
 
   let learner = C.FSAdaGradLearner(
                       O.parms z |> parmVector ,
-                      lr_schedule,
-                      momentum,
+                      T.schedule_per_sample(lr_per_sample, epoch_size),
+                      T.momentum_schedule(0.9366416204111472,minibatch_size),
                       true, //should be exposed by CNTK C# API as C.DefaultUnitGainValue()
-                      var_momentum, //not sure what should be the default
+                      T.momentum_schedule(0.9999986111120757), 
                       options)
   
   let trainer = C.CreateTrainer(

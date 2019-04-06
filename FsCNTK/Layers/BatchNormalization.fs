@@ -9,18 +9,17 @@ module Layers_BN =
 
   type L with
     static member BN
-      (
-          ?map_rank,
-          ?init_scale,
-          ?normalization_time_constant,
-          ?blend_time_constant,
-          ?epsilon,
-          ?use_cntk_engine,
-          ?disable_regularization,
-          ?name
-      ) 
-      = 
-      fun (x:Node) -> 
+        (
+              ?map_rank,
+              ?init_scale,
+              ?normalization_time_constant,
+              ?blend_time_constant,
+              ?epsilon,
+              ?use_cntk_engine,
+              ?disable_regularization,
+              ?name
+        ) 
+        = 
         let map_rank =
             match map_rank with
             | None   -> 0
@@ -38,29 +37,33 @@ module Layers_BN =
 
         let scale        = new Parameter(norm_shape, dataType, init_scale, device, "scale")
         let bias         = new Parameter(norm_shape, dataType, 0., device, "bias")
-        let run_mean     = new Parameter(norm_shape, dataType, 0., device, "aggregate_mean")
-        let run_variance = new Parameter(norm_shape, dataType, 0., device, "aggregate_variance")
-        let run_count    = new Parameter(!--(Ds []) , dataType, 0., device, "aggregate_count")
-    
-        let r = 
-          C.BatchNormalization 
-            (
-              x.Var,
-              scale,
-              bias,
-              run_mean,
-              run_variance,
-              run_count,
-              (map_rank = 1),
-              float normalization_time_constant,
-              float blend_time_constant,
-              epsilon,
-              not use_cntk_engine,
-              false,
-              name = name
-            )
 
-        if !Layers.trace then printfn ">> BN[%s] %A" name r.Output.Shape.Dimensions
+        //comment in python code: # note: these are not really constants; they are updated differently
+        //???
+        let run_mean     = new Constant(norm_shape, dataType, 0., device, "aggregate_mean")
+        let run_variance = new Constant(norm_shape, dataType, 0., device, "aggregate_variance")
+        let run_count    = new Constant(!--(Ds []) , dataType, 0., device, "aggregate_count")
 
-        F r
+        fun (x:Node) -> 
+            let r = 
+                C.BatchNormalization 
+                    (
+                        x.Var,
+                        scale,
+                        bias,
+                        run_mean,
+                        run_variance,
+                        run_count,
+                        (map_rank = 1),
+                        float normalization_time_constant,
+                        float blend_time_constant,
+                        epsilon,
+                        not use_cntk_engine,
+                        false,
+                        name = name
+                    )
+
+            if !Layers.trace then printfn ">> BN[%s] %A" name r.Output.Shape.Dimensions
+
+            F r
 

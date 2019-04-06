@@ -65,13 +65,14 @@ type L =
     let name = defaultArg name "E"
     let init = defaultArg init (C.GlorotUniformInitializer())
 
-    fun (x:Node) -> 
-      let E = 
+    let E = 
         match weights, shape with 
-        |None, None         -> failwith "Embedding: output shape must be specified if weights are not given" 
-        | Some w, Some _    -> failwith "Embedding: output shape must not be specified when weights are given"
-        | Some w, None         -> new Constant(w,name) :> Variable |> V
-        | None, Some shp ->  Node.Parm(O.shape x + shp, init, name)
+        | None, None      -> failwith "Embedding: output shape must be specified if weights are not given" 
+        | Some w, Some _  -> failwith "Embedding: output shape must not be specified when weights are given"
+        | Some w, None    -> new Constant(w,name) :> Variable |> V
+        | None, Some shp  ->  Node.Parm( (D NDShape.InferredDimension) + shp, init, name)
+
+    fun (x:Node) -> 
       let r = x * E
       if !Layers.trace then printfn ">> Embedding %A" (O.shape r)
       r

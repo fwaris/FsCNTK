@@ -43,7 +43,7 @@ datasets |> Map.iter (fun k v -> printfn "%s size: %d" k v.Length)
 
 let create_model() =
     let init_state = Node.Const 0.1
-    L.Recurrence [init_state;init_state] (L.LSTM(D N)) //number of states needs to be specified explicitly
+    L.Recurrence(L.LSTM(D N),[init_state;init_state])  //number of states needs to be specified explicitly
     >> O.getOutput 0  //need to get output - full state is always returned
     >> O.seq_last
     >> L.Dropout(0.2, seed=1)
@@ -63,7 +63,7 @@ let batches (data:(float32[]*float32)[])  =
         let yval = Value.CreateBatch(!-- (D 1), y, device)
         xval,yval)
     
-datasets.["train"]  |>  batches |> Seq.item 0
+//datasets.["train"]  |>  batches |> Seq.item 0
 
 let x = Node.Input (D 1, dynamicAxes=[ Axis.DefaultDynamicAxis(); Axis.DefaultBatchAxis()], name="x")
 let z = create_model() x

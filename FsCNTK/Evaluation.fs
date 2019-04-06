@@ -2,7 +2,6 @@
 open CNTK
 open FsBase
 type C = CNTKLib
-open ValueInterop
 
 // F# wrappers for model evaluation and value conversion
 
@@ -32,11 +31,11 @@ type E =
       let outv = n.Func.Output
       let outp = idict [outv,(null:Value)] 
       n.Func.Evaluate(args,outp,device)
-      outp.[outv] |> getArray
+      outp.[outv] |> V.getArray
 
   static member weights (n:Node) =
     n.Func.Parameters() 
     |> Seq.map(fun p -> 
         let v2 = Value.Create(p.Shape,[p.Value()],device)
-        p.Name, p.Shape.Dimensions |>Seq.toList, v2 |> getArray)
+        p.Name, p.Shape.Dimensions |>Seq.toList, v2 |> V.getArray)
     |> Seq.toArray

@@ -8,6 +8,8 @@ open Layers
 module Layers_Convolution =
   type L with
 
+    //** TODO move parameters out of function block
+
     static member Convolution
         (
             filter_shape,

@@ -45,7 +45,7 @@ let gstride,dstride =
 
 let defaultInit() = C.NormalInitializer(0.2)
 
-let bn_with_relu  = 
+let bn_with_relu()  = 
   L.BN (map_rank=1) 
   >> L.Activation Activation.ReLU
 
@@ -62,9 +62,9 @@ let convolutional_generator =
   let gf_dim = 64
 
   L.Dense (D gfc_dim, name="G h0")
-  >> bn_with_relu
+  >> bn_with_relu()
   >> L.Dense(Ds [gf_dim *2; s_h4; s_w4],init=defaultInit(), name="G h1")
-  >> bn_with_relu
+  >> bn_with_relu()
   >> L.ConvolutionTranspose2D
       (
         D gkernel,
@@ -74,7 +74,7 @@ let convolutional_generator =
         output_shape=Ds[s_h2; s_w2],
         name="G h2"
       )
-  >> bn_with_relu
+  >> bn_with_relu()
   >> L.ConvolutionTranspose2D
     (
       D gkernel,
@@ -82,6 +82,7 @@ let convolutional_generator =
       strides=D gstride,
       pad=true,
       output_shape=Ds[img_h; img_w],
+      activation=Activation.Sigmoid,
       name="G h3"
     )
   >> O.reshapeF (Ds [ g_output_dim])
@@ -128,23 +129,38 @@ let build_graph noise_shape image_shape generator discriminiator =
   let G_loss = 1.0 - O.log D_fake
   let D_loss = - (O.log D_real + O.log(1.0 - D_fake))
 
-  let models_folder = @"D:\repodata\fscntk"
+  let models_folder = @"c:\s\repodata\fscntk\cntk_206b"
 
   G_loss.Func.Save(Path.Combine(models_folder,"G_loss.bin"))
   D_loss.Func.Save(Path.Combine(models_folder,"D_loss.bin"))
   D_fake.Func.Save(Path.Combine(models_folder,"D_fake.bin"))
   D_real.Func.Save(Path.Combine(models_folder,"D_real.bin"))
 
+  let opts = new AdditionalLearningOptions()
+  opts.gradientClippingWithTruncation <- true
+  let varianceMomentum = T.momentum_schedule(0.9999986111120757)
+
   let G_learner = C.AdamLearner(
                       O.parms X_fake |> parmVector,
-                      new TrainingParameterScheduleDouble(lr,1u),
-                      new TrainingParameterScheduleDouble(momentum))
+                      T.schedule_per_sample lr,
+                      T.momentum_schedule momentum,
+                      true,
+                      varianceMomentum,
+                      1e-8,
+                      false,
+                      opts
+                      )
 
   let D_learner = C.AdamLearner(
                       O.parms D_real |> parmVector,
-                      new TrainingParameterScheduleDouble(lr,1u),
-                      new TrainingParameterScheduleDouble(momentum))
-
+                      T.schedule_per_sample lr,
+                      T.momentum_schedule momentum,
+                      true,
+                      varianceMomentum,
+                      1e-8,
+                      false,
+                      opts
+                      )
 
   let G_trainer = C.CreateTrainer(X_fake.Func,G_loss.Func,null,lrnVector [G_learner])
   let D_trainer = C.CreateTrainer(D_real.Func,D_loss.Func,null,lrnVector [D_learner])
@@ -246,8 +262,8 @@ let sMin,sMax,mid =
 
 let grays = 
     imgs
-    |> Seq.map (Seq.map (fun x-> if x < 0.f then 0uy else 255uy)>>Seq.toArray)
-    //|> Seq.map (Seq.map (fun x -> Probability.scaler (0.,255.) (float sMin, float sMax) (float x) |> byte) >> Seq.toArray)
+    //|> Seq.map (Seq.map (fun x-> if x < 0.f then 0uy else 255uy)>>Seq.toArray)
+    |> Seq.map (Seq.map (fun x -> Probability.scaler (0.,255.) (float sMin, float sMax) (float x) |> byte) >> Seq.toArray)
     |> Seq.map (ImageUtils.toGray (28,28))
     |> Seq.toArray
 

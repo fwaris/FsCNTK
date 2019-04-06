@@ -143,6 +143,8 @@ type O =
     let name = defaultArg name ""
     C.ReduceSum(n.Var, axes, true, name) |> F
 
+  static member random_normal shape = C.NormalRandom(!-- shape, dataType) //zero mean, unit variance ?
+
   static member hardmax (n:Node) = C.Hardmax(n.Var) |> F
 
   static member squared_error (prediction:Node, targets:Node) = C.SquaredError(prediction.Var,targets.Var) |> F
@@ -166,6 +168,8 @@ type O =
     
   static member identity (n:Node)  = C.Combine(varVector [n.Var]) |> F //can't we just return the node?
 
+  static member alias (n:Node, ?name) = C.Alias(n.Var,defaultArg name "") |> F
+
   static member as_composite name (n:Node) = C.AsComposite(n.Func,name) |> F
 
   static member seq_unpack (n:Node, padding_value, ?no_mask_output, ?name) =
@@ -182,15 +186,25 @@ type O =
   static member seq_first (n:Node) = C.SequenceFirst(n.Var) |> F
   static member seq_last (n:Node) = C.SequenceLast(n.Var)   |> F
 
-  static member seq_past_value (n:Node,time_step:int) =  C.PastValue(n.Var, uint32 time_step) |> F
+  static member seq_past_value (n:Node,?time_step:int) =  
+    C.PastValue(n.Var,  defaultArg time_step 1 |> uint32) |> F
+
+  static member seq_future_value (n:Node,?time_step:int) =  
+    C.FutureValue(n.Var,  defaultArg time_step 1 |> uint32) |> F
 
   static member seq_gather (operand:Node, condition:Node, ?name) = 
     let name = defaultArg name ""
     C.SequenceGather(operand.Var, condition.Var, name) |> F
 
-  static member seq_is_first (n:Node) = C.SequenceIsFirst(n.Var) |> F
-  static member seq_is_last (n:Node) = C.SequenceIsLast(n.Var) |> F
+  static member seq_scatter (operand:Node, condition:Node, ?name) = 
+    let name = defaultArg name ""
+    C.SequenceScatter(operand.Var, condition.Var, name) |> F
 
-  static member seq_slice (n:Node, begIdx, endIdx) = C.SequenceSlice(n.Var,begIdx,endIdx) |> F
+  static member seq_is_first (n:Node, ?name) = C.SequenceIsFirst(n.Var, defaultArg name "") |> F
+  static member seq_is_last (n:Node, ?name) = C.SequenceIsLast(n.Var,  defaultArg name "") |> F
+
+  static member seq_slice (n:Node, begIdx, endIdx, ?name) = 
+    C.SequenceSlice(n.Var,begIdx,endIdx,  defaultArg name "") |> F
+
 
 //extensions for Node that leverage operations defined above

@@ -1,4 +1,5 @@
-﻿//TODO use Paket for reference management
+﻿//set up environment to debug with a local debug build of CNTK
+//TODO use Paket for reference management
 (******** 
 Note: This code is to reference dlls and native libs in
 the CNTK nuget package. Adjust as needed for CPU or GPU versions
@@ -47,12 +48,12 @@ dependencies
     )    
 
 //uses installed package
-#r @"..\..\packages\CNTK.GPU.2.6.0\lib\netstandard2.0\Cntk.Core.Managed-2.6.dll"
+//#r @"..\..\packages\CNTK.GPU.2.6.0\lib\netstandard2.0\Cntk.Core.Managed-2.6.dll"
 
 //for debugging from source
 //debug output folder should be on path
-//#I @"c:\s\Repos\cntk\x64\Debug"
-//#r @"Cntk.Core.Managed-2.6d.dll"
+#I @"c:\s\Repos\cntk\x64\Debug"
+#r @"Cntk.Core.Managed-2.6d.dll"
 
 //for release source build
 //release output folder should be on path
@@ -87,4 +88,5 @@ module FsiAutoShow =
 #load "..\Layers\ConvolutionTranspose2D.fs"
 #load "..\Layers\Sequence.fs"
 #load "..\Layers\Attention.fs"
+
 

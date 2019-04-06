@@ -6,7 +6,7 @@
     <Platform Condition=" '$(Platform)' == '' ">AnyCPU</Platform>
     <SchemaVersion>2.0</SchemaVersion>
     <ProjectGuid>69928b58-4265-48a0-9817-2a5772d7c4dc</ProjectGuid>
-    <OutputType>Exe</OutputType>
+    <OutputType>Library</OutputType>
     <RootNamespace>FsCNTK</RootNamespace>
     <AssemblyName>FsCNTK</AssemblyName>
     <UseStandardResourceNames>true</UseStandardResourceNames>
@@ -64,6 +64,7 @@
     <Compile Include="Operations.fs" />
     <Compile Include="ValueInterop.fs" />
     <Compile Include="Evaluation.fs" />
+    <Compile Include="Training.fs" />
     <Compile Include="Blocks.fs" />
     <Compile Include="Layers\LayersBase.fs" />
     <Compile Include="Layers\Dense.fs" />
@@ -77,10 +78,13 @@
     <Compile Include="Layers\Attention.fs" />
     <Compile Include="TestPgm.fs" />
     <None Include="Scripts\SetEnv.fsx" />
-    <None Include="Scripts\TestDCGAN.fsx" />
-    <None Include="Scripts\TestLstm.fsx" />
-    <None Include="Scripts\Seq2Seq.fsx" />
-    <None Include="Scripts\TimeSeriesLSTM.fsx" />
+    <None Include="Scripts\SetEnvDebug.fsx" />
+    <None Include="Scripts\cntk_105_autoencoder.fsx" />
+    <None Include="Scripts\cntk_106a_lstm_with_sim_data.fsx" />
+    <None Include="Scripts\cntk_202_lang_understanding.fsx" />
+    <None Include="Scripts\cntk_204_s2s_attention.fsx" />
+    <None Include="Scripts\cntk_206b__dcgan.fsx" />
+    <None Include="Scripts\cntk_599a_sequence_to_sequence.fsx" />
     <None Include="Scripts\imgs\LSTM_Lang_Model.Png" />
     <None Include="Scripts\imgs\Discriminator_Loss.Png" />
     <None Include="Scripts\imgs\Generator_loss.Png" />

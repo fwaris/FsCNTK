@@ -55,15 +55,6 @@ module FsBase =
       is |>  Seq.iter vs.Add
       vs
 
-  let schedule (ls : (int*float) seq) epochSize =
-    ls 
-    |> Seq.map (fun (n,r) ->  new PairSizeTDouble(uint32 n,r))
-    |> ResizeArray
-    |> (fun x -> new VectorPairSizeTDouble(x))
-    |> (fun x  -> new TrainingParameterScheduleDouble(x, uint32 epochSize))
-
-  let constSchedule (f:float) = new TrainingParameterScheduleDouble(f)
-
   let create_shape (dims:int seq) = NDShape.CreateNDShape dims
 
   //utility operator for F# implicit conversions 
@@ -135,6 +126,7 @@ module FsBase =
 
       member x.Var = match x with V v -> v | F f -> !> f | P p -> p :> Variable
       member x.Func = match x with V v -> v.ToFunction() | F f -> f | P p -> p.ToFunction()
+
       member x.DebugDisplay = 
         let axisStr = (if x.Var.HasBatchAxis() then "#" else "") + (if x.Var.HasSequenceAxis() then ", *" else "")
         sprintf "%s %A [%s]" x.Var.Name (x.Var.Shape |> fromNDShape |> dims) axisStr

@@ -36,7 +36,7 @@ Layers.trace := true
 
 //Folder containing ATIS files which are
 //part of the CNTK binary release download or CNTK git repo
-let folder = @"c:\s\Examples\LanguageUnderstanding\ATIS\Data"
+let folder = @"C:\s\Repos\cntk\Examples\LanguageUnderstanding\ATIS\Data"
 
 let vocab_size = 943 
 let num_labels = 129
@@ -75,7 +75,7 @@ let cVal = new Constant(!> [| NDShape.InferredDimension |], dataType, 0.1) :> Va
 let create_model() =
   let cell = L.LSTM(D hidden_dim,enable_self_stabilization=false)
   L.Embedding(D emb_dim, name="embed")
-  >> L.Recurrence(initial_states=[cVal;cVal], go_backwards=false) cell
+  >> L.Recurrence(cell, initial_states=[cVal;cVal], go_backwards=false) 
   >> O.getOutput 0
   >> L.Dense(D num_labels, name="classify")
 
@@ -129,9 +129,9 @@ let train (reader:MinibatchSource) (model:Node) max_epochs task =
   let epoch_size = 18000
   let minibatch_size = 70
 
-  let lr_per_sample = [for _ in 0..4 -> 1,3e-4] @ [1,1.5e-4]
+  let lr_per_sample = [for _ in 1..4 -> 1,3e-4] @ [1,1.5e-4]
   let lr_per_minibatch = lr_per_sample |> List.map (fun (i,r) -> i, r * float minibatch_size)
-  let lr_schedule = schedule lr_per_minibatch epoch_size
+  let lr_schedule = T.schedule(lr_per_sample, 1, epoch_size)
 
   let momentum = new TrainingParameterScheduleDouble(0.9048374180359595,uint32 minibatch_size)
 
@@ -143,7 +143,7 @@ let train (reader:MinibatchSource) (model:Node) max_epochs task =
                       lr_schedule,
                       momentum,
                       true,                                   //should be exposed by CNTK C# API as C.DefaultUnitGainValue()
-                      constSchedule 0.9999986111120757,       //from python code
+                      T.momentum_schedule 0.9999986111120757,       //from python code
                       1e-8,                                   //from python code 
                       false,                                  //from python code
                       options)
@@ -252,8 +252,8 @@ let do_test() =
 //use the trained model to predict the tag for each
 //word in a query
 let test_slot_tagging() =
-  let queryFile = @"D:\Repos\cntk\Examples\LanguageUnderstanding\ATIS\BrainScript\query.wl"
-  let slotsFile = @"D:\Repos\cntk\Examples\LanguageUnderstanding\ATIS\BrainScript\slots.wl"
+  let queryFile = @"C:\s\Repos\cntk\Examples\LanguageUnderstanding\ATIS\BrainScript\query.wl"
+  let slotsFile = @"C:\s\Repos\cntk\Examples\LanguageUnderstanding\ATIS\BrainScript\slots.wl"
   let query_dict = queryFile |> File.ReadLines |> Seq.mapi (fun i q -> q,i) |> Map.ofSeq
   let slots_wl = slotsFile |> File.ReadLines |> Seq.toArray
   let slot_dict  = slots_wl |> Seq.mapi (fun i q -> q,i) |> Map.ofSeq

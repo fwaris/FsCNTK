@@ -8,6 +8,8 @@ open Layers
 module Layers_ConvolutionTranspose =
   type L with
 
+    //** TODO move parameters out of function block
+
     static member ConvolutionTranspose 
         (
             filter_shape, 
