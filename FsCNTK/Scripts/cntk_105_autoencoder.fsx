@@ -17,6 +17,11 @@ open CNTK
 type C = CNTKLib
 Layers.trace := true
 
+//ensure latest nvidia driver is installed
+
+//uncomment to set device global to CPU - defaults to GPU
+//device <- DeviceDescriptor.CPUDevice  
+
 (*
     Autoencoder for dimensionality reduction
     Based on: https://cntk.ai/pythondocs/CNTK_105_Basic_Autoencoder_for_Dimensionality_Reduction.html
@@ -159,7 +164,6 @@ let img_data =
     |> V.getArray 
     |> Array.head 
     |> Array.chunkBySize input_dim
-
 let idx = Probability.RNG.Value.Next(int eval_minibatach_size)
 
 let orig_image = img_data.[idx]

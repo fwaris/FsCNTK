@@ -67,7 +67,7 @@ open FSharp.Charting
 module FsiAutoShow = 
     fsi.AddPrinter(fun (ch:FSharp.Charting.ChartTypes.GenericChart) -> ch.ShowChart() |> ignore; "(Chart)")
 
-#r "netstandard.dll" 
+#r "netstandard" // without .dll seems to be the correct way
 
 #load "..\ImageUtils.fs"
 #load "..\Probability.fs"

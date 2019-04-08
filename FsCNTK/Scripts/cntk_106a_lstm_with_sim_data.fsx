@@ -70,14 +70,14 @@ let z = create_model() x
 let l = Node.Input (D 1, dynamicAxes=Seq.toList z.Var.DynamicAxes, name="y")
 
 let learning_rate = 0.02
-let lr_schedule = constSchedule learning_rate
+let lr_schedule = T.schedule_per_sample learning_rate
 
 let loss = O.squared_error(z,l)
 let error = O.squared_error(z,l)
 
 loss.Func.Save(@"C:\s\repodata\fscntk\lstm_ts\fs.bin")
 
-let momentum_schedule = schedule [0,0.9] BATCH_SIZE
+let momentum_schedule = T.momentum_schedule(0.9, BATCH_SIZE)
 
 let learner = C.FSAdaGradLearner(z.Func.Parameters() |> parmVector, lr_schedule, momentum_schedule, true)
 
