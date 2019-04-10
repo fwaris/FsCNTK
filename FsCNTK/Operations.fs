@@ -67,8 +67,7 @@ type O =
     >> O.combine
 
   static member splice (ns:Node seq, ?axis) = 
-    let axis = axis |> Option.defaultValue (new Axis(-1))
-    let axis = O.santize_axis (Some axis)
+    let axis = O.santize_axis axis
     C.Splice( ns |> Seq.map (fun n->n.Var) |> varVector, axis) 
     |> F
     
@@ -133,8 +132,8 @@ type O =
               -> new Axis(-1 - a.StaticAxisIndex())
     | Some a  -> a
 
-  static member reduce_sum(n:Node, ?axis, ?name) = 
-    let axis = O.santize_axis axis 
+  static member reduce_sum(n:Node, ?axis, ?name) =
+    let axis = O.santize_axis axis
     let name = defaultArg name ""
     C.ReduceSum(n.Var, axis, name) |> F
 
@@ -143,13 +142,19 @@ type O =
     let name = defaultArg name ""
     C.ReduceSum(n.Var, axes, true, name) |> F
 
-  static member random_normal shape = C.NormalRandom(!-- shape, dataType) //zero mean, unit variance ?
+  static member random_normal shape = C.NormalRandom(!-- shape, dataType) |> F //zero mean, unit variance ?
+
+  static member random_normal(shape,mu,sigma) = C.NormalRandom(!-- shape,dataType,mu,sigma) |> F //zero mean, unit variance ?
 
   static member hardmax (n:Node) = C.Hardmax(n.Var) |> F
 
   static member squared_error (prediction:Node, targets:Node) = C.SquaredError(prediction.Var,targets.Var) |> F
 
-  static member cross_entropy_with_softmax(z:Node,labels:Node) = C.CrossEntropyWithSoftmax(z.Var,labels.Var) |> F
+  static member square (n:Node, ?name) = C.Square(n.Var, defaultArg name "") |> F
+
+  static member cross_entropy_with_softmax(z:Node,labels:Node, ?axis) = C.CrossEntropyWithSoftmax(z.Var,labels.Var, new Axis(defaultArg axis 0)) |> F
+
+  static member binary_cross_entropy (z:Node, labels:Node,?axis) = C.BinaryCrossEntropy(z.Var,labels.Var) |> F
 
   static member classification_error(z:Node,labels:Node) = C.ClassificationError(z.Var,labels.Var) |> F
 
