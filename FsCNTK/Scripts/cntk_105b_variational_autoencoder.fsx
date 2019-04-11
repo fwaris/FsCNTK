@@ -57,11 +57,13 @@ let recognition (features:Node) =
     let w_stddev = 1e-6 + (L.Dense(D n_z, name="w_stddev", init=init()) >> O.softplus) h_flat //stdv must be positive so softplus
     w_mean, w_stddev
 
-let generation(z:Node) =
+let generation =
     let decode = 
-        L.Dense(D encoding_dim, activation=Activation.ELU, init=init()) 
-        >> L.Dense(D input_dim, activation=Activation.Sigmoid, init=init()) 
-    decode z
+        L.Dense(D encoding_dim, activation=Activation.ELU, init=init())              //declare generator model statically 
+        >> L.Dense(D input_dim, activation=Activation.Sigmoid, init=init())          //the parameters are allocated here 
+                                                                                     //they are updated at training
+                                                                                     //this allows us to use generator separately later
+    fun (z:Node) -> decode z                                                         //return a function so that the weights can be re-used with different input variables
 
 let train_and_test (reader_train:MinibatchSource) (reader_test:MinibatchSource)  (encode_func:Node->Node*Node) (decode_func:Node->Node) = 
     let x = input ./ 255.  // rescaled 0 to 1
@@ -185,6 +187,7 @@ let reader_test = create_reader test_file false (uint32 input_dim) (uint32 num_l
 let model, simple_ae_train_error, simple_ae_test_error = train_and_test reader_train reader_test recognition generation
 ;;
 
+(* use validation set to reproduce images
 let reader_eval = create_reader test_file false (uint32 input_dim) (uint32 num_label_classes)
 let eval_minibatach_size = 50u
 let eval_data = reader_eval.GetNextMinibatch(eval_minibatach_size)
@@ -202,7 +205,24 @@ let decode_image = model |> E.eval1 (idict [input.Var, V.toValue(orig_image, D i
 
 let img = decode_image |> Array.map byte |> ImageUtils.toGray (28,28)
 ImageUtils.show img
+*)
 
+//generate new images using the 2-D latent space
+let zInput = Node.Input(D n_z, dynamicAxes=[Axis.DefaultBatchAxis()])
+let zModel = generation zInput
+let range = [for i in -2.0 .. 0.2 .. 2.0->i]
+let manifold =
+    [for a in range do
+        for b in range do
+            let img = 
+                zModel 
+                |> E.eval1 (idict [zInput.Var, V.toValue([a;b], D n_z)]) 
+                |> Array.head 
+                |> Array.map ((*) 255.f)
+                |> Array.map byte
+                |> ImageUtils.toGray (28,28)
+            yield img]
 
-
+let sz =  (manifold.Length |> float |> sqrt |> int)
+ImageUtils.showGrid (sz,sz) manifold
 
