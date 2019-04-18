@@ -1,7 +1,7 @@
 ﻿namespace FsCNTK
 open CNTK
 open FsBase
-type C = CNTKLib
+//type C = CNTKLib
 
 // F# wrappers for model evaluation and value conversion
 

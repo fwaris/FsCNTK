@@ -151,12 +151,11 @@ let eval_data = reader_eval.GetNextMinibatch(eval_minibatach_size)
 let img_data = 
     eval_data.[reader_eval.StreamInfo(featureStreamName)].data 
     |> Vl.getArray 
-    |> Array.head 
     |> Array.chunkBySize input_dim
 let idx = Probability.RNG.Value.Next(int eval_minibatach_size)
 
 let orig_image = img_data.[idx]
-let decode_image = model |> E.eval1 (idict [input.Var, Vl.toValue(orig_image, D input_dim)]) |> Array.head |> Array.map ((*) 255.f)
+let decode_image = model |> E.eval1 (idict [input.Var, Vl.toValue(orig_image, D input_dim)]) |> Array.map ((*) 255.f)
 
 let img = decode_image |> Array.map byte |> ImageUtils.toGray (28,28)
 ImageUtils.show img

@@ -62,7 +62,7 @@ open System.Diagnostics
 
       static member Input (shape,?dynamicAxes,?isSparse,?needsGradient,?name) =
 
-        let dynamicAxes   = defaultArg dynamicAxes []
+        let dynamicAxes   = defaultArg dynamicAxes [Axis.DefaultBatchAxis()]
         let isSparse      = defaultArg isSparse false
         let name          = defaultArg name ""
         let needsGradient = defaultArg needsGradient false

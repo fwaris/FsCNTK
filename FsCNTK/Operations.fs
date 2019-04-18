@@ -165,7 +165,7 @@ type O =
   static member tanh (n:Node) = C.Tanh(n.Var) |> F
 
   static member gather(reference:Node, indices:Node, ?axis, ?name) =
-    C.GatherOp(indices.Var,reference.Var,defaultArg axis (new Axis(0)), defaultArg name "")
+    C.GatherOp(indices.Var,reference.Var,defaultArg axis (new Axis(0)), defaultArg name "") |> F
 
   static member element_select(condition:Node, thenOperand:Node, elseOperand:Node, ?name) = 
     C.ElementSelect(condition.Var, thenOperand.Var, elseOperand.Var, defaultArg name "") |> F

@@ -213,7 +213,6 @@ let manifold =
             let img = 
                 zModel 
                 |> E.eval1 (idict [zInput.Var, Vl.toValue([a;b], D n_z)]) 
-                |> Array.head 
                 |> Array.map ((*) 255.f)
                 |> Array.map byte
                 |> ImageUtils.toGray (28,28)
