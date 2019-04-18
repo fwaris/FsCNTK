@@ -9,9 +9,9 @@ open System.IO
 open System
 open Blocks
 
-let x = Node.Input(D 512, dynamicAxes=[Axis.DefaultDynamicAxis(); Axis.DefaultBatchAxis()])
-let ax = -2
-let ax' = -ax - 1
-let ab = L.PastValueWindow(20, new Axis(ax), false) (x)
-//a.DebugDisplay
-//b.DebugDisplay
+
+let flag = V.toValue [10.; -1.; -0.; 0.3; 100.]
+let value_if_true = V.toValue [1.; 10.; 100.; 1000.; 10000.]
+let value_if_false = V.toValue [ 2.; 20.; 200.; 2000.; 20000.]
+let v = O.element_select(Node.Const flag.Data, Node.Const value_if_true.Data, Node.Const value_if_false.Data)
+let v2 =  v |> E.eval1(idict[])

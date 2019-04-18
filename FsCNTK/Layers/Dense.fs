@@ -1,11 +1,10 @@
 ﻿namespace FsCNTK
 open CNTK
-open System
 open FsBase
 open Blocks
 open Layers
 
-
+[<AutoOpen>]
 module Layers_Dense =
 
   type L with

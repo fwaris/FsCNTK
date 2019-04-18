@@ -1,12 +1,10 @@
 ﻿namespace FsCNTK
 open CNTK
-open System
 open FsBase
 open Blocks
-open Layers
 
 #nowarn "25"
-
+[<AutoOpen>]
 module Layers_Sequence =
   
   type private Cell = LSTM | GRU | RNNStep

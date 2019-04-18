@@ -1,8 +1,7 @@
 ﻿namespace FsCNTK
 open CNTK
-open FsBase
 
-type V =
+type Vl =
 //utilty functions to create CNTK Value from raw data and vice-a-versa
 
   //handle default cases upto 3 dimensions (can't be empty)
@@ -30,9 +29,7 @@ type V =
     Value.CreateSequence(!-- shape, v |> Seq.collect (Seq.collect (Seq.map float32)), device)
      
   static member getArray (v:Value) = 
-    let ds = !++ v.Shape |> dims
-    let var = Node.Input(Ds ds)
-    v.GetDenseData<float32>(var.Var) |> Seq.map Seq.toArray |> Seq.toArray
+    v.GetDenseData<float32>(new Constant(v.Data) :> Variable) |> Seq.map Seq.toArray |> Seq.toArray
 
 
     

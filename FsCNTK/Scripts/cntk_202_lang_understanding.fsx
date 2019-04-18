@@ -1,24 +1,7 @@
 ﻿#load "SetEnv.fsx"
 open FsCNTK
-open FsCNTK.FsBase
-open FsCNTK.Layers
-open Layers_Dense
-open Layers_BN
-open Layers_ConvolutionTranspose2D
-open Layers_Convolution2D
-open Layers_Sequence
 open CNTK
 open System.IO
-open FsCNTK.FsBase
-open System
-
-let getValue (v:Variable) = 
-  let vv = v.GetValue()
-  let vvv = new Value(vv)
-  let vvvv = vvv.GetDenseData<float32>(v)
-  printfn "%A" v.Shape.Dimensions
-  printfn "%A" (vvvv |> Seq.map Seq.average |> Seq.average)
-  vvvv |> Seq.collect (fun x->x)
 
 (*
 Language Understanding with Recurrent Networks

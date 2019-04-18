@@ -1,18 +1,7 @@
 ﻿#load "SetEnv.fsx"
 open FsCNTK
-open FsCNTK.FsBase
-open FsCNTK.Layers
-open Layers_Dense
-open Layers_Dropout
-open Layers_BN
-open Layers_ConvolutionTranspose2D
-open Layers_Convolution2D
-open Layers_Sequence
 open CNTK
 open System.IO
-open FsCNTK.FsBase
-open System
-open CNTK
 
 type C = CNTKLib
 Layers.trace := true
@@ -161,13 +150,13 @@ let eval_data = reader_eval.GetNextMinibatch(eval_minibatach_size)
 
 let img_data = 
     eval_data.[reader_eval.StreamInfo(featureStreamName)].data 
-    |> V.getArray 
+    |> Vl.getArray 
     |> Array.head 
     |> Array.chunkBySize input_dim
 let idx = Probability.RNG.Value.Next(int eval_minibatach_size)
 
 let orig_image = img_data.[idx]
-let decode_image = model |> E.eval1 (idict [input.Var, V.toValue(orig_image, D input_dim)]) |> Array.head |> Array.map ((*) 255.f)
+let decode_image = model |> E.eval1 (idict [input.Var, Vl.toValue(orig_image, D input_dim)]) |> Array.head |> Array.map ((*) 255.f)
 
 let img = decode_image |> Array.map byte |> ImageUtils.toGray (28,28)
 ImageUtils.show img

@@ -1,11 +1,7 @@
 ﻿#load "SetEnv.fsx"
 open FsCNTK
-open FsCNTK.FsBase
-open Layers_Dense
 open CNTK
 open System.IO
-open System
-open CNTK
 
 type C = CNTKLib
 Layers.trace := true
@@ -216,7 +212,7 @@ let manifold =
         for b in range do
             let img = 
                 zModel 
-                |> E.eval1 (idict [zInput.Var, V.toValue([a;b], D n_z)]) 
+                |> E.eval1 (idict [zInput.Var, Vl.toValue([a;b], D n_z)]) 
                 |> Array.head 
                 |> Array.map ((*) 255.f)
                 |> Array.map byte

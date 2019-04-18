@@ -61,8 +61,10 @@
     <Compile Include="ImageUtils.fs" />
     <Compile Include="Probability.fs" />
     <Compile Include="FsBase.fs" />
-    <Compile Include="Operations.fs" />
+    <Compile Include="Shape.fs" />
     <Compile Include="ValueInterop.fs" />
+    <Compile Include="Node.fs" />
+    <Compile Include="Operations.fs" />
     <Compile Include="Evaluation.fs" />
     <Compile Include="Training.fs" />
     <Compile Include="Blocks.fs" />

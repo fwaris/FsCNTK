@@ -1,10 +1,10 @@
 ﻿namespace FsCNTK
 open CNTK
-open System
 open FsBase
 open Blocks
 open Layers
 
+[<AutoOpen>]
 module Layers_ConvolutionTranspose =
   type L with
 

@@ -1,17 +1,6 @@
 ﻿#load "SetEnv.fsx"
 open FsCNTK
-open FsCNTK.FsBase
-open FsCNTK.Layers
-open Layers_Dense
-open Layers_Dropout
-open Layers_BN
-open Layers_ConvolutionTranspose2D
-open Layers_Convolution2D
-open Layers_Sequence
 open CNTK
-open System.IO
-open FsCNTK.FsBase
-open System
 (*
     Time series predicion with LSTM
     Based on: https://cntk.ai/pythondocs/CNTK_106A_LSTM_Timeseries_with_Simulated_Data.html

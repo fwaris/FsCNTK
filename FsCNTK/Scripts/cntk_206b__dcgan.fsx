@@ -1,11 +1,5 @@
 ﻿#load "SetEnv.fsx"
 open FsCNTK
-open FsCNTK.FsBase
-open FsCNTK.Layers
-open Layers_Dense
-open Layers_BN
-open Layers_ConvolutionTranspose2D
-open Layers_Convolution2D
 open CNTK
 open System.IO
 

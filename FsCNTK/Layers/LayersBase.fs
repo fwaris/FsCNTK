@@ -19,6 +19,7 @@ type Activation =
 //based on python layers module (see CNTK Python API for documentation)
 //mimics python code as closely as feasible
 
+[<AutoOpen>]
 module Layers =
   let trace = ref false
 

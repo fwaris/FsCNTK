@@ -1,12 +1,9 @@
 ﻿namespace FsCNTK
 open CNTK
 open FsCNTK
-open System
-open FsBase
 open Blocks
-open Layers_Dense
-open Layers_Sequence
 
+[<AutoOpen>]
 module Models_Attention =
   type M =
 

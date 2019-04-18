@@ -1,17 +1,8 @@
 ﻿#load "SetEnv.fsx"
 open FsCNTK
-open FsCNTK.FsBase
-open Layers_Dense
-open Layers_Sequence
-open Models_Attention
-open Layers
 open CNTK
 open System.IO
-open System
 open Blocks
-open FsCNTK
-open CNTK
-open System
 
 //Reference tutorial: https://cntk.ai/pythondocs/CNTK_599A_Sequence_To_Sequence.html
 //(the tutorial walks through different aspects of this problem and is therefore much longer;

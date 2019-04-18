@@ -144,21 +144,32 @@ type O =
 
   static member random_normal shape = C.NormalRandom(!-- shape, dataType) |> F //zero mean, unit variance ?
 
-  static member random_normal(shape,mu,sigma) = C.NormalRandom(!-- shape,dataType,mu,sigma) |> F //zero mean, unit variance ?
+  static member random_normal(shape,mu,sigma, ?seed, ?name) = 
+    match seed with 
+    | None -> C.NormalRandom(!-- shape,dataType,mu,sigma) |> F  //not sure about the default seed used so let that default
+    | Some s -> C.NormalRandom(!-- shape,dataType,mu,sigma,uint32 s,defaultArg name "") |> F
 
-  static member hardmax (n:Node) = C.Hardmax(n.Var) |> F
+  static member hardmax (n:Node, ?name) = C.Hardmax(n.Var, defaultArg name "") |> F
 
-  static member squared_error (prediction:Node, targets:Node) = C.SquaredError(prediction.Var,targets.Var) |> F
+  static member squared_error (prediction:Node, targets:Node, ?name) = 
+    C.SquaredError(prediction.Var,targets.Var, defaultArg name "" ) |> F
 
   static member square (n:Node, ?name) = C.Square(n.Var, defaultArg name "") |> F
 
   static member cross_entropy_with_softmax(z:Node,labels:Node, ?axis) = C.CrossEntropyWithSoftmax(z.Var,labels.Var, new Axis(defaultArg axis 0)) |> F
 
-  static member binary_cross_entropy (z:Node, labels:Node,?axis) = C.BinaryCrossEntropy(z.Var,labels.Var) |> F
+  static member binary_cross_entropy (z:Node, labels:Node,?name) = C.BinaryCrossEntropy(z.Var,labels.Var, defaultArg name "") |> F
 
-  static member classification_error(z:Node,labels:Node) = C.ClassificationError(z.Var,labels.Var) |> F
+  static member classification_error(z:Node,labels:Node, ?name) = C.ClassificationError(z.Var,labels.Var, defaultArg name "") |> F
 
   static member tanh (n:Node) = C.Tanh(n.Var) |> F
+
+  static member gather(reference:Node, indices:Node, ?axis, ?name) =
+    C.GatherOp(indices.Var,reference.Var,defaultArg axis (new Axis(0)), defaultArg name "")
+
+  static member element_select(condition:Node, thenOperand:Node, elseOperand:Node, ?name) = 
+    C.ElementSelect(condition.Var, thenOperand.Var, elseOperand.Var, defaultArg name "") |> F
+
 
   static member times (l:Node, r:Node, ?output_rank, ?infer_input_rank_to_map, ?name) =
     let name = defaultArg name ""
@@ -168,8 +179,6 @@ type O =
     | _,_            -> failwith "output_rank and infer_input_rank_to_map should be either omitted or specified, together"
     |> F
 
-  static member element_select(condition:Node, thenOperand:Node, elseOperand:Node) = 
-    C.ElementSelect(condition.Var, thenOperand.Var, elseOperand.Var) |> F
     
   static member identity (n:Node)  = C.Combine(varVector [n.Var]) |> F //can't we just return the node?
 

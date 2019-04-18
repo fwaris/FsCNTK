@@ -1,11 +1,8 @@
 ﻿namespace FsCNTK
-open CNTK
-open System
 open FsBase
-open Blocks
-open Layers
 open Layers_Convolution
 
+[<AutoOpen>]
 module Layers_Convolution2D =
   type L with
 

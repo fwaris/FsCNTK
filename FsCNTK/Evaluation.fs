@@ -31,11 +31,11 @@ type E =
       let outv = n.Func.Output
       let outp = idict [outv,(null:Value)] 
       n.Func.Evaluate(args,outp,device)
-      outp.[outv] |> V.getArray
+      outp.[outv] |> Vl.getArray
 
   static member weights (n:Node) =
     n.Func.Parameters() 
     |> Seq.map(fun p -> 
         let v2 = Value.Create(p.Shape,[p.Value()],device)
-        p.Name, p.Shape.Dimensions |>Seq.toList, v2 |> V.getArray)
+        p.Name, p.Shape.Dimensions |>Seq.toList, v2 |> Vl.getArray)
     |> Seq.toArray

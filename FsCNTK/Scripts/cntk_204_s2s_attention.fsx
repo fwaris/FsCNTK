@@ -1,9 +1,5 @@
 ﻿#load "SetEnv.fsx"
 open FsCNTK
-open FsCNTK.FsBase
-open Layers_Dense
-open Layers_Sequence
-open Models_Attention
 open CNTK
 open System.IO
 open System

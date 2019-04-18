@@ -1,10 +1,7 @@
 ﻿namespace FsCNTK
-open CNTK
-open System
 open FsBase
-open Blocks
-open Layers
 
+[<AutoOpen>]
 module Layers_Dropout =
   //this should be exposed in the C# Swig API but it is not
   //Python returns this value using the following code

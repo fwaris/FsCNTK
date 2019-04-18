@@ -1,11 +1,8 @@
 ﻿namespace FsCNTK
-open CNTK
-open System
 open FsBase
-open Blocks
-open Layers
 open Layers_ConvolutionTranspose
 
+[<AutoOpen>]
 module Layers_ConvolutionTranspose2D =
   type L with
   //ConvolutionTranspose2D -- create a 2D convolution transpose layer with optional non-linearity
