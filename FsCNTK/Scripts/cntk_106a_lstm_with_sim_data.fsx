@@ -35,7 +35,7 @@ let create_model() =
     L.Recurrence(L.LSTM(D N),[init_state;init_state])  //number of states needs to be specified explicitly
     >> O.getOutput 0  //need to get output - full state is always returned
     >> O.seq_last
-    >> L.Dropout(0.2, seed=1)
+    >> L.Dropout(0.2, seed=1u)
     >> L.Dense(D 1)
 
 let TRAINING_STEPS = 10000

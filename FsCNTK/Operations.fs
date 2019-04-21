@@ -10,6 +10,16 @@ type O =
     | F f -> !++ f.Output.Shape
     | P p -> !++ p.Shape
 
+  static member unpack_batch (n:Node, ?name) = C.UnpackBatch(n.Var,defaultArg name "") |> F
+
+  static member to_batch(n:Node, ?name) = C.ToBatch(n.Var, defaultArg name "") |> F
+
+  static member squeeze (n:Node, ?axes) = 
+    match axes with
+    | None -> C.Squeeze(n.Var)
+    | Some axs -> C.Squeeze(n.Var, axisVector axs)
+    |> F
+
   static member reshapeF shape (n:Node) = C.Reshape(n.Var, !-- shape) |> F //reshape for pipelining
 
   static member reshape (n:Node, shape:Shape, ?begin_axis, ?end_axis) = 
@@ -27,6 +37,12 @@ type O =
     let internal_reshape_end_axis = sanitize_reshape_axis(begin_axis)
 
     C.Reshape(n.Var, !-- shape, internal_reshape_begin_axis, internal_reshape_end_axis) |> F
+
+  static member transpose (n:Node, ?axes) = 
+    match axes with
+    | None -> C.Transpose(n.Var)
+    | Some axes -> C.Transpose(n.Var, axisVector axes)
+    |> F
 
   static member reconcile_dynamic_axis (operand:Node, axesAsOperand:Node) = 
     C.ReconcileDynamicAxes(operand.Var, axesAsOperand.Var) |> F
@@ -67,7 +83,7 @@ type O =
     >> O.combine
 
   static member splice (ns:Node seq, ?axis) = 
-    let axis = O.santize_axis axis
+    let axis = O.sanitize_axis axis
     C.Splice( ns |> Seq.map (fun n->n.Var) |> varVector, axis) 
     |> F
     
@@ -120,12 +136,20 @@ type O =
 
   static member abs(n:Node) = C.Abs(n.Var) |> F
 
+  static member flatten(n:Node, ?axis, ?name) =
+    match axis with
+    | None -> C.Flatten(n.Var)
+    | Some a -> 
+        let a = O.sanitize_axis a
+        C.Flatten(n.Var,a,defaultArg name "")
+    |> F
+
   static member softmax (n:Node, ?axis, ?name ) = 
     let axis = defaultArg axis (new Axis(0))
     let name = defaultArg name ""
     C.Softmax(n.Var,axis,name) |> F
 
-  static member private santize_axis (a:Axis option) =
+  static member private sanitize_axis (a:Axis option) =
     match a with 
     | None    -> Axis.AllStaticAxes()
     | Some a when a.IsStatic && a.StaticAxisIndex() <> Axis.EndStaticAxis().StaticAxisIndex() 
@@ -133,7 +157,7 @@ type O =
     | Some a  -> a
 
   static member reduce_sum(n:Node, ?axis, ?name) =
-    let axis = O.santize_axis axis
+    let axis = O.sanitize_axis axis
     let name = defaultArg name ""
     C.ReduceSum(n.Var, axis, name) |> F
 
@@ -146,8 +170,25 @@ type O =
 
   static member random_normal(shape,mu,sigma, ?seed, ?name) = 
     match seed with 
-    | None -> C.NormalRandom(!-- shape,dataType,mu,sigma) |> F  //not sure about the default seed used so let that default
+    | None -> C.NormalRandom(!-- shape,dataType,mu,sigma) |> F  //not sure about the default seed used so let that default to base API
     | Some s -> C.NormalRandom(!-- shape,dataType,mu,sigma,uint32 s,defaultArg name "") |> F
+
+
+  static member uniform(shape,?low,?high, ?seed, ?name) = 
+    let low = defaultArg low 0.
+    let high = defaultArg high 1.0
+    let name = defaultArg name ""
+    let seed = defaultArg seed (C.GetRandomSeed())
+    C.UniformRandom(!-- shape, dataType,low,high,uint32 seed, name) |> F
+
+  static member uniform_like(n:Node,?low,?high, ?seed, ?name) = 
+    let low = defaultArg low 0.
+    let high = defaultArg high 1.0
+    let name = defaultArg name ""
+    let seed = defaultArg seed (C.GetRandomSeed())
+    C.UniformRandomLike(n.Var,low,high,uint32 seed, name) |> F
+
+  static member round (n:Node) = C.Round(n.Var) |> F
 
   static member hardmax (n:Node, ?name) = C.Hardmax(n.Var, defaultArg name "") |> F
 
@@ -165,11 +206,14 @@ type O =
   static member tanh (n:Node) = C.Tanh(n.Var) |> F
 
   static member gather(reference:Node, indices:Node, ?axis, ?name) =
-    C.GatherOp(indices.Var,reference.Var,defaultArg axis (new Axis(0)), defaultArg name "") |> F
+    match axis with
+    | None -> C.GatherOp(indices.Var, reference.Var) |> F
+    | Some ax -> 
+        let ax = O.sanitize_axis (Some ax)
+        C.GatherOp(indices.Var,reference.Var, ax, defaultArg name "") |> F
 
   static member element_select(condition:Node, thenOperand:Node, elseOperand:Node, ?name) = 
     C.ElementSelect(condition.Var, thenOperand.Var, elseOperand.Var, defaultArg name "") |> F
-
 
   static member times (l:Node, r:Node, ?output_rank, ?infer_input_rank_to_map, ?name) =
     let name = defaultArg name ""

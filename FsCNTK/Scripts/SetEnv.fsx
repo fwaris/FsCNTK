@@ -30,14 +30,14 @@ let pkgdir =  __SOURCE_DIRECTORY__ + @"..\..\..\packages"
 
 let fullPath paths = Path.GetFullPath(Path.Combine(paths))
 
-//change these for you installation (e.g. GPU vs CPU)
+//change these for your installation (e.g. GPU vs CPU)
 let dependencies = [
-      @"CNTK.Deps.Cuda.2.6.0\support\x64\Dependency"
-      @"CNTK.Deps.cuDNN.2.6.0\support\x64\Dependency"
-      @"CNTK.Deps.MKL.2.6.0\support\x64\Dependency"
-      @"CNTK.Deps.OpenCV.Zip.2.6.0\support\x64\Dependency"
-      @"CNTK.Deps.OpenCV.Zip.2.6.0\support\x64\Dependency\Release"
-      @"CNTK.GPU.2.6.0\support\x64\Release"
+      @"CNTK.Deps.Cuda.2.7.0\support\x64\Dependency"
+      @"CNTK.Deps.cuDNN.2.7.0\support\x64\Dependency"
+      @"CNTK.Deps.MKL.2.7.0\support\x64\Dependency"
+      @"CNTK.Deps.OpenCV.Zip.2.7.0\support\x64\Dependency"
+      @"CNTK.Deps.OpenCV.Zip.2.7.0\support\x64\Dependency\Release"
+      @"CNTK.GPU.2.7.0\support\x64\Release"
     ]
 
 dependencies 
@@ -47,7 +47,7 @@ dependencies
     )    
 
 //uses installed package
-#r @"..\..\packages\CNTK.GPU.2.6.0\lib\netstandard2.0\Cntk.Core.Managed-2.6.dll"
+#r @"..\..\packages\CNTK.GPU.2.7.0\lib\netstandard2.0\Cntk.Core.Managed-2.7.dll"
 
 //for debugging from source
 //debug output folder should be on path

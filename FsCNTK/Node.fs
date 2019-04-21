@@ -16,6 +16,7 @@ open System.Diagnostics
 
       member x.Var = match x with V v -> v | F f -> !> f | P p -> p :> Variable
       member x.Func = match x with V v -> v.ToFunction() | F f -> f | P p -> p.ToFunction()
+      member x.Shape = !++ x.Var.Shape
 
       member x.DebugDisplay = 
         let axisStr = (if x.Var.HasBatchAxis() then "#" else "") + (if x.Var.HasSequenceAxis() then ", *" else "")

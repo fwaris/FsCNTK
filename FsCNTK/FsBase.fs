@@ -10,6 +10,12 @@ module FsBase =
 
   type C = CNTKLib
 
+  //this should be exposed in the C# Swig API but it is not
+  //Python returns this value using the following code
+  //from cntk.cntk_py import sentinel_value_for_auto_select_random_seed as SentinelValueForAutoSelectRandomSeed
+  //seems to be:  System.UInt64.MaxValue - 2UL |> uint32 (from C++)
+  let SentinelValueForAutoSelectRandomSeed = 4294967293L
+
   let inline asList sz x  = [for _ in 1 .. sz -> x]
 
   let inline idict (s:(^a * ^b) seq) =

@@ -3,11 +3,6 @@ open FsBase
 
 [<AutoOpen>]
 module Layers_Dropout =
-  //this should be exposed in the C# Swig API but it is not
-  //Python returns this value using the following code
-  //from cntk.cntk_py import sentinel_value_for_auto_select_random_seed as SentinelValueForAutoSelectRandomSeed
-  //seems to be:  System.UInt64.MaxValue - 2UL |> uint32 (from C++)
-  let SentinelValueForAutoSelectRandomSeed = 4294967293L
 
   type L with
 
@@ -20,7 +15,7 @@ module Layers_Dropout =
         )                            
         =
         let name = defaultArg name ""
-        let seed = defaultArg seed C.SentinelValueForInferParamInitRank
+        let seed = defaultArg seed (C.GetRandomSeed())
 
         let dropout_rate = 
           match dropout_rate,keep_prob with

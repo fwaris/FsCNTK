@@ -152,6 +152,8 @@ let img_data =
     eval_data.[reader_eval.StreamInfo(featureStreamName)].data 
     |> Vl.getArray 
     |> Array.chunkBySize input_dim
+
+
 let idx = Probability.RNG.Value.Next(int eval_minibatach_size)
 
 let orig_image = img_data.[idx]
