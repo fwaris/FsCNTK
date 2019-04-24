@@ -82,6 +82,7 @@
     <None Include="Scripts\SetEnvDebug.fsx" />
     <None Include="Scripts\cntk_105_autoencoder.fsx" />
     <None Include="Scripts\cntk_105b_variational_autoencoder.fsx" />
+    <None Include="Scripts\cntk_105c_factor_vae.fsx" />
     <None Include="Scripts\cntk_106a_lstm_with_sim_data.fsx" />
     <None Include="Scripts\cntk_202_lang_understanding.fsx" />
     <None Include="Scripts\cntk_204_s2s_attention.fsx" />

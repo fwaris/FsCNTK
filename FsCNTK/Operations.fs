@@ -83,7 +83,7 @@ type O =
     >> O.combine
 
   static member splice (ns:Node seq, ?axis) = 
-    let axis = O.sanitize_axis axis
+    let axis = sanitize_axis axis
     C.Splice( ns |> Seq.map (fun n->n.Var) |> varVector, axis) 
     |> F
     
@@ -124,9 +124,6 @@ type O =
 
   static member eq (n1:Node, n2:Node) = C.Equal(n1.Var,n2.Var) |> F
 
-  static member reduce_mean(n:Node, a:Axis) = C.ReduceMean(n.Var, a) |> F
-  static member reduce_mean(n:Node, axis:int) = C.ReduceMean(n.Var,new Axis(axis)) |> F
-  static member reduce_mean(n:Node, axes:int seq) = C.ReduceMean(n.Var, axes |> Seq.map (fun n->new Axis(n)) |> axisVector) |> F
 
   static member reduce_max (axes:int seq) (n:Node) = C.ReduceMax(n.Var, axes |> Seq.map (fun n->new Axis(n)) |> axisVector ) |> F
 
@@ -140,24 +137,21 @@ type O =
     match axis with
     | None -> C.Flatten(n.Var)
     | Some a -> 
-        let a = O.sanitize_axis a
+        let a = sanitize_axis a
         C.Flatten(n.Var,a,defaultArg name "")
     |> F
+
+  static member reduce_mean(n:Node, a:Axis) = C.ReduceMean(n.Var, a) |> F
+  static member reduce_mean(n:Node, axis:int) = C.ReduceMean(n.Var,new Axis(axis)) |> F
+  static member reduce_mean(n:Node, axes:int seq) = C.ReduceMean(n.Var, axes |> Seq.map (fun n->new Axis(n)) |> axisVector) |> F
 
   static member softmax (n:Node, ?axis, ?name ) = 
     let axis = defaultArg axis (new Axis(0))
     let name = defaultArg name ""
     C.Softmax(n.Var,axis,name) |> F
 
-  static member private sanitize_axis (a:Axis option) =
-    match a with 
-    | None    -> Axis.AllStaticAxes()
-    | Some a when a.IsStatic && a.StaticAxisIndex() <> Axis.EndStaticAxis().StaticAxisIndex() 
-              -> new Axis(-1 - a.StaticAxisIndex())
-    | Some a  -> a
-
   static member reduce_sum(n:Node, ?axis, ?name) =
-    let axis = O.sanitize_axis axis
+    let axis = sanitize_axis axis
     let name = defaultArg name ""
     C.ReduceSum(n.Var, axis, name) |> F
 
@@ -165,6 +159,8 @@ type O =
     let axes = defaultArg axes (axisVector [new Axis(0)])
     let name = defaultArg name ""
     C.ReduceSum(n.Var, axes, true, name) |> F
+
+  static member sum(n:Node seq) = C.Sum( n |> Seq.map (fun x->x.Var) |> varVector) |> F
 
   static member random_normal shape = C.NormalRandom(!-- shape, dataType) |> F //zero mean, unit variance ?
 
@@ -188,6 +184,33 @@ type O =
     let seed = defaultArg seed (C.GetRandomSeed())
     C.UniformRandomLike(n.Var,low,high,uint32 seed, name) |> F
 
+  ///radomly permute the columns across the minibatch
+  static member randperm (x:Node, minibatch_size) =
+    let x' = O.unpack_batch x //remove dynamic axis
+
+    if x'.Shape.Dims.Length <> 2 then failwith "only 2D tensors supported"
+    //can use flatten here?
+
+    let rows = minibatch_size       //this has to be statically given
+    let cols = x'.Shape.Dims.[1]
+    let dataShape = Ds [rows; cols]
+
+    let rands = O.uniform(dataShape,1.,float rows) 
+    let idxs = (O.round rands) - Node.Scalar(1.0) // 0 to (rows-1)
+    let idx_rowOffsets = idxs .* (float cols)
+    let colOffsets = Node.Const([for i in 0. .. float(cols-1) -> i], D cols)
+
+    let idxs_colOffsets = idx_rowOffsets + colOffsets   //gather used below supports 1 axis
+                                                        //this corrects the indices so that the corresponding
+                                                        //col is used from the (randomly) referenced row
+    let flatDim = rows * cols
+    let flatX = O.reshape(x', D flatDim)      //1D rows
+    let flatIdxs = O.reshape(idxs_colOffsets, D flatDim)
+    let flatXPerm = O.gather(flatX,flatIdxs, new Axis(0))   //gather using the indices created
+    let xperm = O.reshape(flatXPerm, dataShape)
+    let x'' = O.to_batch xperm
+    x''
+
   static member round (n:Node) = C.Round(n.Var) |> F
 
   static member hardmax (n:Node, ?name) = C.Hardmax(n.Var, defaultArg name "") |> F
@@ -209,7 +232,7 @@ type O =
     match axis with
     | None -> C.GatherOp(indices.Var, reference.Var) |> F
     | Some ax -> 
-        let ax = O.sanitize_axis (Some ax)
+        let ax = sanitize_axis (Some ax)
         C.GatherOp(indices.Var,reference.Var, ax, defaultArg name "") |> F
 
   static member element_select(condition:Node, thenOperand:Node, elseOperand:Node, ?name) = 
@@ -225,6 +248,10 @@ type O =
 
     
   static member identity (n:Node)  = C.Combine(varVector [n.Var]) |> F //can't we just return the node?
+
+  static member zeros_like (n:Node) = C.ZerosLike(n.Var) |> F
+
+  static member ones_like (n:Node) = C.OnesLike(n.Var) |> F
 
   static member alias (n:Node, ?name) = C.Alias(n.Var,defaultArg name "") |> F
 

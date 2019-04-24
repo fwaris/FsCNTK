@@ -31,7 +31,7 @@ open System.Diagnostics
      
       ///For simple slicing (use O.slice for complex slicing operations)
       member x.GetSlice(s1,e1) = 
-        let axs = axisVector [new Axis(0)] // assume first axis
+        let axs = [Some (new Axis(0)) |> sanitize_axis] |> axisVector
         let s1 = defaultArg s1 0
         let e1 = match e1 with Some e -> e | None -> failwith "end index is required"
         C.Slice(x.Var, axs, intVector [s1], intVector [e1]) |> F

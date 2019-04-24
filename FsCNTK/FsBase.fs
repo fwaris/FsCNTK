@@ -62,6 +62,13 @@ module FsBase =
       is |>  Seq.iter vs.Add
       vs
 
+  let sanitize_axis (a:Axis option) =
+      match a with 
+      | None    -> Axis.AllStaticAxes()
+      | Some a when a.IsStatic && a.StaticAxisIndex() <> Axis.EndStaticAxis().StaticAxisIndex() 
+                -> new Axis(-1 - a.StaticAxisIndex())
+      | Some a  -> a
+
 
   //utility operator for F# implicit conversions 
   let inline (!>) (x:^a) : ^b = ((^a or ^b) : (static member op_Implicit : ^a -> ^b) x)

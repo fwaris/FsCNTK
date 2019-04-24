@@ -1,4 +1,5 @@
-﻿#load "SetEnv.fsx"
+﻿#I @"C:\Users\fwaris\Source\Repos\FsCNTK\FsCNTK\Scripts"
+#load "SetEnv.fsx"
 open FsCNTK
 open CNTK
 open System.IO
@@ -12,9 +13,14 @@ Layers.trace := true
 //device <- DeviceDescriptor.CPUDevice  
 
 (*
-    Variational Autoencoder as a generative model
+    Factor VAE - a generative model driven by a disentagled latent representation
+    "Distanging by Factorizing", Kim, et. al https://arxiv.org/pdf/1802.05983.pdf
+
     (see basic autoencoder reference: https://cntk.ai/pythondocs/CNTK_105_Basic_Autoencoder_for_Dimensionality_Reduction.html)
     https://github.com/hwalsuklee/tensorflow-mnist-VAE/blob/master/mnist_data.py
+
+    )
+    
 *)
 
 let isFast = false
@@ -40,18 +46,29 @@ let input_dim = 784 //28*28
 let encoding_dim = 512
 let ouput_dim = input_dim
 let num_label_classes = 10
-let n_z = 2    // 2 dimensional latent space
+let n_z = 10
+let disc_dim = 1000
+let gamma = 60.0
 
 //let init() = C.GlorotNormalInitializer()
 let init() = C.HeNormalInitializer()
 
 let input =  Node.Input(D input_dim, dynamicAxes=[Axis.DefaultBatchAxis()])
 
+let discriminator()  =
+    let logits = 
+        let layers = seq {for i in 1 .. 5 -> L.Dense(D disc_dim, activation=Activation.LeakyReLU(Some 0.2), init=init())}
+        let dense = (Seq.head layers, Seq.tail layers) ||> Seq.fold ( >> )
+        dense>>L.Dense(D 2, init=init())
+    let prob = logits >> O.softmax
+    (fun (x:Node) -> logits x), //return two functions for logit and prob 
+    (fun (x:Node) -> prob x)
+
 let recognition (features:Node) =
     let h_flat = L.Dense(D encoding_dim, activation=Activation.ELU, init=init()) features
     let w_mean = L.Dense(D n_z, name="w_mean", init=init()) h_flat
-    let w_stddev = 1e-6 + (L.Dense(D n_z, name="w_stddev", init=init()) >> O.softplus) h_flat //stdv must be positive so softplus
-    w_mean, w_stddev
+    let w_stddev_logits = L.Dense(D n_z, name="w_stddev", init=init()) h_flat
+    w_mean, w_stddev_logits
 
 let generation =
     let decode = 
@@ -63,68 +80,92 @@ let generation =
 
 let train_and_test (reader_train:MinibatchSource) (reader_test:MinibatchSource)  (encode_func:Node->Node*Node) (decode_func:Node->Node) = 
     let x = input ./ 255.  // rescaled 0 to 1
+    let minibatch_size = 64
 
-    let mu,sigma = encode_func x 
+    let Dsc,Dsc_prob = discriminator() //allocate parameters
+
+    let mu,sigma_logits = encode_func x 
+    let sigma = O.exp(sigma_logits ./ 2.)
     let samples = O.random_normal(D n_z, 0., 1.) //zero mean, unit variance
-    let guessed_z = mu + (sigma .* samples)
-    let y = decode_func guessed_z
+    let guessed_z = mu + (sigma .* samples)      //reparametrize trick
+    let recnstr_x = decode_func guessed_z
 
-    let recnstr_loss_vctr = x .* O.log(y)  + (1.0 - x) .* O.log(1.0 - y)
-    let recnstr_loss = O.reduce_sum(recnstr_loss_vctr,axis=new Axis(0))
+    let perm_z = O.randperm(guessed_z, minibatch_size)
 
-    let kl_dvrgnc_vctr = O.square mu + O.square sigma - O.log(1e-8 + O.square(sigma)) - 1.0
-    let kl_dvrgnc = 0.5 .* O.reduce_sum(kl_dvrgnc_vctr,axis=new Axis(0))
+    let D_z_logits = Dsc guessed_z
 
-    let ELBO = O.reduce_mean(recnstr_loss,axis=0) - O.reduce_mean(kl_dvrgnc,axis=0)
-    let loss = - ELBO
+    let D_z_prob      = Dsc_prob guessed_z
+    let D_z_perm_prob = Dsc_prob perm_z
+
+    //this matches the paper and https://github.com/paruby/FactorVAE/blob/master/factor_vae.py
+    let D_tc_loss2 = - 0.5 .* (O.reduce_mean(O.log(1e-8 + D_z_prob.[0..1]),new Axis(0)) + 
+                              O.reduce_mean(O.log(1e-8 + D_z_perm_prob.[1..2]),new Axis(0)))
+
+    //from: https://github.com/paruby/FactorVAE/blob/master/factor_vae.py
+    //# FactorVAE paper has gamma * log(D(z) / (1- D(z))) in Algorithm 2, where D(z) is probability of being real
+    //# Let PT be probability of being true, PF be probability of being false. Then we want log(PT/PF)
+    //# Since PT = exp(logit_T) / [exp(logit_T) + exp(logit_F)]
+    //# and  PT = exp(logit_F) / [exp(logit_T) + exp(logit_F)], we have that
+    //# log(PT/PF) = logit_T - logit_F
+    let vae_tc_loss = gamma .* O.reduce_mean( D_z_logits.[0 .. 1]  - D_z_logits.[1 .. 2]  , new Axis(0))
+
+    let recnstr_loss_vctr = x .* O.log(recnstr_x)  + (1.0 - x) .* O.log(1.0 - recnstr_x)
+    let recnstr_loss = - O.reduce_sum(recnstr_loss_vctr, new Axis(0))
+
+    let variance = O.exp(sigma_logits)
+    let kl_dvrgnc_vctr = (1.0 + sigma_logits - O.square mu - variance)
+    let kl_dvrgnc = -0.5 .* O.reduce_mean(kl_dvrgnc_vctr,new Axis(0))
+
+    let loss = recnstr_loss + kl_dvrgnc + vae_tc_loss 
 
     loss.Func.Save(@"C:\s\repodata\fscntk\cntk_105b\fs_loss.bin")
-
+     
     let epoch_size = 30000
-    let minibatch_size = 64
-    let num_sweeps_to_train_with = if isFast then 5 else 200
+    let num_sweeps_to_train_with = if isFast then 10 else 600
     let num_samples_per_sweep = 60000
     let num_minibatches_to_train = (num_samples_per_sweep * num_sweeps_to_train_with) / minibatch_size
     
-    let lr_schedule = T.schedule_per_sample (3e-3)
+    let lr_schedule = T.schedule_per_sample (3e-4)
+    let lr_schedule2 = T.schedule_per_sample (3e-5)
 
     let momentum_schedule = T.schedule(0.9126265014311797, minibatch_size)
 
     let opts = new AdditionalLearningOptions()
     opts.gradientClippingWithTruncation <- true  // mimic defaults used in python 
-    //opts.gradientClippingThresholdPerSample <- 2.3
 
-    //let learner = C.FSAdaGradLearner( 
-    //                 O.parms y |> parmVector,
-    //                 lr_schedule,
-    //                 momentum_schedule,
-    //                 true,
-    //                 T.schedule_per_sample(0.9999986111120757), //variance momentum
-    //                 opts
-    //                 )
+    let vae_learner = C.AdamLearner( 
+                         O.parms recnstr_x |> parmVector,
+                         lr_schedule,
+                         momentum_schedule,
+                         true,
+                         T.momentum_schedule 0.9999986111120757,
+                         1e-8,
+                         false,
+                         opts)
 
-    let learner = C.AdamLearner( 
-                     O.parms y |> parmVector,
-                     lr_schedule,
-                     momentum_schedule)
-                     //true,
-                     //T.schedule_per_sample(0.9999986111120757), //variance momentum
-                     //1e-8
-                     //)
-                     
-    //let learner = C.AdaDeltaLearner(
-    //                 O.parms y |> parmVector,
-    //                 lr_schedule)
-                     //0.95,
-                     //1e-8,
-                     //opts
-                     //)
-
-    let trainer = Trainer.CreateTrainer(
+    let vae_trainer = Trainer.CreateTrainer(
                         null,
                         loss.Func,
                         loss.Func,
-                        ResizeArray[learner]
+                        ResizeArray[vae_learner]
+                    )
+
+    let dsc_learner = C.AdamLearner( 
+                         O.parms D_z_logits |> parmVector,
+                         lr_schedule2,
+                         momentum_schedule,
+                         true,
+                         T.momentum_schedule 0.9999986111120757,
+                         1e-8,
+                         false,
+                         opts)
+
+
+    let dsc_trainer = Trainer.CreateTrainer(
+                        null,
+                        D_tc_loss2.Func,
+                        D_tc_loss2.Func,
+                        ResizeArray[dsc_learner]
                     )
 
     let featureStreamInfo = reader_train.StreamInfo(featureStreamName) 
@@ -139,15 +180,22 @@ let train_and_test (reader_train:MinibatchSource) (reader_test:MinibatchSource) 
                 input.Var, data.[featureStreamInfo] //same input / output of autoencoder
                 //label.Var, data.[featureStreamInfo]
                 ]
-        let r = trainer.TrainMinibatch(input_map, device)
-        let samples =  trainer.PreviousMinibatchSampleCount()
-        let batchLoss = trainer.PreviousMinibatchEvaluationAverage() * float samples
-        let lr = learner.LearningRate()
-        printfn "batch %d loss:%f %d lr:%f" i batchLoss samples lr
+        let vae_r = vae_trainer.TrainMinibatch(input_map, device)
+        let dsc_r = dsc_trainer.TrainMinibatch(input_map,device)
 
-        aggregate_metric <- aggregate_metric + batchLoss
+        let samples_vae =  vae_trainer.PreviousMinibatchSampleCount()
+        let batchLoss_vae = vae_trainer.PreviousMinibatchEvaluationAverage() * float samples_vae
 
-    let train_error = aggregate_metric * 100. / float (trainer.TotalNumberOfSamplesSeen())
+        let samples_dsc =  dsc_trainer.PreviousMinibatchSampleCount()
+        let batchLoss_dsc = dsc_trainer.PreviousMinibatchEvaluationAverage() * float samples_dsc
+
+        printfn "batch %d loss_vae:%f  loss_dsc:%f" i batchLoss_vae batchLoss_dsc
+
+        aggregate_metric <- aggregate_metric + batchLoss_vae
+
+
+
+    let train_error = aggregate_metric * 100. / float (dsc_trainer.TotalNumberOfSamplesSeen())
     printfn "Average training  error: %0.2f" train_error
 
     let test_minibatch_size = 32
@@ -167,14 +215,14 @@ let train_and_test (reader_train:MinibatchSource) (reader_test:MinibatchSource) 
             //dt.[label.Var] <- data.[featureStreamInfo]
             dt
 
-        let eval_error = trainer.TestMinibatch(input_map, device)
+        let eval_error = vae_trainer.TestMinibatch(input_map, device)
         metric_numer <- metric_numer + abs(eval_error * float test_minibatch_size)
         metric_denom <- metric_denom + float test_minibatch_size
 
     let test_error = metric_numer * 100. / metric_denom
     printfn "Average test error: %0.2f" test_error
 
-    y, train_error, test_error
+    recnstr_x, train_error, test_error
 
 let reader_train = create_reader train_file true (uint32 input_dim) (uint32 num_label_classes)
 
@@ -203,21 +251,38 @@ let img = decode_image |> Array.map byte |> ImageUtils.toGray (28,28)
 ImageUtils.show img
 *)
 
-//generate new images using the 2-D latent space
+(*
+*)
+
 let zInput = Node.Input(D n_z, dynamicAxes=[Axis.DefaultBatchAxis()])
 let zModel = generation zInput
-let range = [for i in -2.0 .. 0.2 .. 2.0->i]
-let manifold =
-    [for a in range do
-        for b in range do
+let range = [-2.0; -1.0; 0.0; 1.0; 2.0]
+let manifold =                      //vary only 1 dimension while keeping other fixed in batches of k
+    [for i in 0 .. n_z - 1 do
+        for r in range do
+            for k in [-1.5; -1.0; 1.0; 1.5] do
+                let ks = [| for i in 0 .. n_z - 1 -> k|]
+                ks.[i] <- r
+                yield ((i,k), ks)]
+
+let byslice = 
+    manifold
+    |> List.groupBy (fst>>fst)
+    |> List.map (fun (i,vs)-> i, vs |> List.sortBy (fun ((_,k),_) -> k) |> Seq.map snd |> Seq.toList)
+    |> Map.ofList
+
+byslice
+    |> Map.map(fun i vs ->
+        vs |> List.map(fun v ->
             let img = 
                 zModel 
-                |> E.eval1 (idict [zInput.Var, Vl.toValue([a;b], D n_z)]) 
-                |> Array.map ((*) 255.f)
-                |> Array.map byte
-                |> ImageUtils.toGray (28,28)
-            yield img]
+                    |> E.eval1 (idict [zInput.Var, Vl.toValue(v, D n_z)]) 
+                    |> Array.map ((*) 255.f)
+                    |> Array.map byte
+                    |> ImageUtils.toGray (28,28)
+            img))
+    |> Map.iter (fun i imgs ->     
+        let sz =  (imgs.Length |> float |> sqrt |> ceil |> int)
+        ImageUtils.showGrid (string i) (sz,sz) imgs)
 
-let sz =  (manifold.Length |> float |> sqrt |> int)
-ImageUtils.showGrid "imgs" (sz,sz) manifold
 

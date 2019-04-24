@@ -40,12 +40,12 @@ let show (bmp:Bitmap) =
     form.Controls.Add(p)
     form.Show()
 
-let showGrid (w,h) imgList =
+let showGrid title (w,h) imgList =
     let form = new Form()
     form.Width  <- 600
     form.Height <- 400
     form.Visible <- true 
-    form.Text <- "Images"
+    form.Text <- title
     let grid = new TableLayoutPanel()
     grid.AutoSize <- true
     grid.ColumnCount <- w
