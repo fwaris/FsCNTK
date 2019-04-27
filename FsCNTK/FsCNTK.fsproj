@@ -71,6 +71,7 @@
     <Compile Include="Layers\LayersBase.fs" />
     <Compile Include="Layers\Dense.fs" />
     <Compile Include="Layers\Dropout.fs" />
+    <Compile Include="Layers\LayerNormalization.fs" />
     <Compile Include="Layers\BatchNormalization.fs" />
     <Compile Include="Layers\Convolution.fs" />
     <Compile Include="Layers\Convolution2D.fs" />

@@ -57,7 +57,7 @@ let private gaussian() =
         v1 <- 2. * RNG.Value.NextDouble() - 1.
         v2 <- 2. * RNG.Value.NextDouble() - 1.
         s <- v1 * v1 + v2 * v2
-    let polar = sqrt(-2.*log(s) / s)
+    let polar = sqrt(-2.0 * log(s) / s)
     polar,v1,v2
  
 let private spare = new ThreadLocal<_>(fun () -> ref None)

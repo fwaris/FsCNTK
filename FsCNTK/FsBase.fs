@@ -69,6 +69,19 @@ module FsBase =
                 -> new Axis(-1 - a.StaticAxisIndex())
       | Some a  -> a
 
+  let sanitize_multi_axis_reduction_list (a:Axis list option) =
+      match a with 
+      | None  -> [Axis.AllStaticAxes()]
+      | Some axs when axs |> List.exists (fun a->a.IsSequenceAxis()) -> failwith "Reduction operation over multiple axes can not contain sequence axis"
+      | Some axs -> axs |> List.map (Some>>sanitize_axis)
+
+  let sanitize_permutation (perm:Axis list) =
+      let axs = perm |> List.map (fun a->a.StaticAxisIndex())
+      let axs' = List.distinct axs 
+      if axs.Length <> axs'.Length then failwith "duplicate axis detected"
+      match perm |> List.tryFind (fun a -> a.StaticAxisIndex() >= -perm.Length && a.StaticAxisIndex() < perm.Length |> not) with
+      | Some a -> failwithf "invalid axis %A: elements must be from -%d to %d" a -perm.Length (perm.Length - 1)
+      | None -> perm |> List.rev |> List.map (fun a-> new Axis(perm.Length - a.StaticAxisIndex() - 1))
 
   //utility operator for F# implicit conversions 
   let inline (!>) (x:^a) : ^b = ((^a or ^b) : (static member op_Implicit : ^a -> ^b) x)

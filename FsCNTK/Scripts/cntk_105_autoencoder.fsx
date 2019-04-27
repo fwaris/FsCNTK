@@ -55,7 +55,7 @@ let train_and_test (reader_train:MinibatchSource) (reader_test:MinibatchSource) 
     let model:Node = model_func input
 
     let target = label ./ 255.
-    let loss = - (target .* O.log(model) + (1.0 - target) .* O.log(1.0 - model))
+    let loss = - (target .* O.log(model)) + ((1.0 - target) .* O.log(1.0 - model))
     let label_error = O.classification_error(model,target)
     loss.Func.Save(@"C:\s\repodata\fscntk\cntk_105\fs_loss.bin")
 

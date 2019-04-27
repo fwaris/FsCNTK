@@ -17,7 +17,7 @@ Layers.trace := true
     https://github.com/hwalsuklee/tensorflow-mnist-VAE/blob/master/mnist_data.py
 *)
 
-let isFast = false
+let isFast = true
 
 let featureStreamName = "features" //need stream names later
 let labelsStreamName = "labels"
@@ -69,13 +69,13 @@ let train_and_test (reader_train:MinibatchSource) (reader_test:MinibatchSource) 
     let guessed_z = mu + (sigma .* samples)
     let y = decode_func guessed_z
 
-    let recnstr_loss_vctr = x .* O.log(y)  + (1.0 - x) .* O.log(1.0 - y)
+    let recnstr_loss_vctr = (x .* O.log(y))  + ((1.0 - x) .* O.log(1.0 - y))
     let recnstr_loss = O.reduce_sum(recnstr_loss_vctr,axis=new Axis(0))
 
     let kl_dvrgnc_vctr = O.square mu + O.square sigma - O.log(1e-8 + O.square(sigma)) - 1.0
     let kl_dvrgnc = 0.5 .* O.reduce_sum(kl_dvrgnc_vctr,axis=new Axis(0))
 
-    let ELBO = O.reduce_mean(recnstr_loss,axis=0) - O.reduce_mean(kl_dvrgnc,axis=0)
+    let ELBO = O.reduce_mean(recnstr_loss,axis=new Axis(0)) - O.reduce_mean(kl_dvrgnc,axis=new Axis(0))
     let loss = - ELBO
 
     loss.Func.Save(@"C:\s\repodata\fscntk\cntk_105b\fs_loss.bin")

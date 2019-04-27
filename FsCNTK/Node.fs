@@ -119,7 +119,7 @@ open System.Diagnostics
       static member ( ./ ) (n:Node,d:float) = C.ElementDivide(n.Var, Node._const d) |> F
       static member ( ./ ) (n:Node,d:Node) = C.ElementDivide(n.Var, d.Var) |> F
 
-      static member ( .* ) (l:Node,r:float) = C.ElementTimes(l.Var, Node._const r) |> F
+      static member ( .* ) (l:Node,r:float) = C.ElementTimes(l.Var, Node._const r) |> F  //Note: operators .* and ./ have lower precendence than + or - ; use parantheses to resolve precedence in mixed expressions
       static member ( .* ) (l:float,r:Node) = C.ElementTimes(Node._const l, r.Var) |> F
       static member ( .* ) (l:Node,r:Node) = C.ElementTimes(l.Var, r.Var) |> F
 

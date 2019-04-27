@@ -5,7 +5,7 @@ open System.IO
 open System
 open Blocks
 
-//************* do not use - this is still a work in progress 
+//************* model trains without error but needs more validation for correctness
 
 //Reference: https://cntk.ai/pythondocs/CNTK_204_Sequence_To_Sequence.html
 
@@ -131,7 +131,7 @@ let create_model =
       fun (dhdc:Node) (x:Node) ->
         let dh = O.getOutput 0 dhdc 
         let h_att = attention_model (O.getOutput 0 encoded_input, dh)
-        let x = O.splice [x; h_att]  
+        let x = O.splice [x; h_att]
         fn dhdc x
 
     let rec_layers = 
@@ -172,7 +172,7 @@ let create_model_greedy s2smodel input =
 
 let create_critetion_function model input labels = 
   let postprocessed_labels = O.seq_slice(labels,1,0) // <s> A B C </s> --> A B C </s>
-  let postprocessed_labels = O.reconcile_dynamic_axis(postprocessed_labels,input)
+  //let postprocessed_labels = O.reconcile_dynamic_axis(postprocessed_labels,input)
   let z = model input postprocessed_labels
   let ce = O.cross_entropy_with_softmax(z, postprocessed_labels)
   let errs = O.classification_error(z, postprocessed_labels)
@@ -262,11 +262,11 @@ let train
       mbs <- mbs + 1
       
     let model_path = sprintf @"D:\repodata\fscntk\s2s\model_%d.cmf" epoch
-    printf "Saving final model to '%s'" model_path
+    printfn "Saving final model to '%s'" model_path
     model_greedy.Func.Save(model_path)
-    printf "%d epochs complete." max_epochs
+    printfn "%d epochs complete." max_epochs
 
 let do_train() =
   train train_reader valid_reader vocab' () create_model 1 25000
-
+;;
 do_train()

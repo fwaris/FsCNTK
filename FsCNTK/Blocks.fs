@@ -5,6 +5,7 @@ open FsBase
 
 //based on python blocks module (see CNTK Python API for documentation)
 
+[<AutoOpen>]
 module Blocks =
 
     type B =

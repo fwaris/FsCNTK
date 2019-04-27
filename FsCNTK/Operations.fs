@@ -17,7 +17,7 @@ type O =
   static member squeeze (n:Node, ?axes) = 
     match axes with
     | None -> C.Squeeze(n.Var)
-    | Some axs -> C.Squeeze(n.Var, axisVector axs)
+    | Some axs -> C.Squeeze(n.Var, axs |> List.map (Some>>sanitize_axis) |>  axisVector)
     |> F
 
   static member reshapeF shape (n:Node) = C.Reshape(n.Var, !-- shape) |> F //reshape for pipelining
@@ -41,7 +41,7 @@ type O =
   static member transpose (n:Node, ?axes) = 
     match axes with
     | None -> C.Transpose(n.Var)
-    | Some axes -> C.Transpose(n.Var, axisVector axes)
+    | Some axes -> C.Transpose(n.Var, axes |> sanitize_permutation |> axisVector)
     |> F
 
   static member reconcile_dynamic_axis (operand:Node, axesAsOperand:Node) = 
@@ -83,7 +83,8 @@ type O =
     >> O.combine
 
   static member splice (ns:Node seq, ?axis) = 
-    let axis = sanitize_axis axis
+    let axis = defaultArg axis (new Axis(-1))
+    let axis = sanitize_axis (Some axis)
     C.Splice( ns |> Seq.map (fun n->n.Var) |> varVector, axis) 
     |> F
     
@@ -124,14 +125,13 @@ type O =
 
   static member eq (n1:Node, n2:Node) = C.Equal(n1.Var,n2.Var) |> F
 
-
-  static member reduce_max (axes:int seq) (n:Node) = C.ReduceMax(n.Var, axes |> Seq.map (fun n->new Axis(n)) |> axisVector ) |> F
-
   static member log (x:Node) = C.Log(x.Var) |> F
 
   static member exp(n:Node) = C.Exp(n.Var) |> F
 
   static member abs(n:Node) = C.Abs(n.Var) |> F
+
+  static member sum(n:Node seq) = C.Sum( n |> Seq.map (fun x->x.Var) |> varVector) |> F
 
   static member flatten(n:Node, ?axis, ?name) =
     match axis with
@@ -141,26 +141,26 @@ type O =
         C.Flatten(n.Var,a,defaultArg name "")
     |> F
 
-  static member reduce_mean(n:Node, a:Axis) = C.ReduceMean(n.Var, a) |> F
-  static member reduce_mean(n:Node, axis:int) = C.ReduceMean(n.Var,new Axis(axis)) |> F
-  static member reduce_mean(n:Node, axes:int seq) = C.ReduceMean(n.Var, axes |> Seq.map (fun n->new Axis(n)) |> axisVector) |> F
+  static member reduce_mean(n:Node, ?axis, ?name) = 
+    C.ReduceMean(n.Var, sanitize_axis axis, defaultArg name "") |> F
+
+  static member reduce_mean(n:Node, axes, ?keepDims, ?name) = 
+    C.ReduceMean(n.Var, axes |> sanitize_multi_axis_reduction_list |> axisVector, defaultArg keepDims  true, defaultArg name "") |> F
 
   static member softmax (n:Node, ?axis, ?name ) = 
-    let axis = defaultArg axis (new Axis(0))
-    let name = defaultArg name ""
-    C.Softmax(n.Var,axis,name) |> F
+    C.Softmax (n.Var, sanitize_axis axis, defaultArg name "") |> F
 
-  static member reduce_sum(n:Node, ?axis, ?name) =
-    let axis = sanitize_axis axis
-    let name = defaultArg name ""
-    C.ReduceSum(n.Var, axis, name) |> F
+  static member reduce_sum(n:Node, ?axis, ?name) = 
+    C.ReduceSum(n.Var, sanitize_axis axis, defaultArg name "") |> F
 
-  static member reduce_sum(n:Node, ?axes, ?name) = 
-    let axes = defaultArg axes (axisVector [new Axis(0)])
-    let name = defaultArg name ""
-    C.ReduceSum(n.Var, axes, true, name) |> F
+  static member reduce_sum(n:Node, axes, ?keepDims, ?name) = 
+    C.ReduceSum(n.Var, axes |> sanitize_multi_axis_reduction_list |> axisVector, defaultArg keepDims  true, defaultArg name "") |> F
 
-  static member sum(n:Node seq) = C.Sum( n |> Seq.map (fun x->x.Var) |> varVector) |> F
+  static member reduce_max(n:Node, ?axis, ?name) = 
+    C.ReduceMax(n.Var, sanitize_axis axis, defaultArg name "") |> F
+
+  static member reduce_max(n:Node, axes, ?keepDims, ?name) = 
+    C.ReduceMax(n.Var, axes |> sanitize_multi_axis_reduction_list |> axisVector, defaultArg keepDims  true, defaultArg name "") |> F
 
   static member random_normal shape = C.NormalRandom(!-- shape, dataType) |> F //zero mean, unit variance ?
 
@@ -168,7 +168,6 @@ type O =
     match seed with 
     | None -> C.NormalRandom(!-- shape,dataType,mu,sigma) |> F  //not sure about the default seed used so let that default to base API
     | Some s -> C.NormalRandom(!-- shape,dataType,mu,sigma,uint32 s,defaultArg name "") |> F
-
 
   static member uniform(shape,?low,?high, ?seed, ?name) = 
     let low = defaultArg low 0.
@@ -220,7 +219,15 @@ type O =
 
   static member square (n:Node, ?name) = C.Square(n.Var, defaultArg name "") |> F
 
-  static member cross_entropy_with_softmax(z:Node,labels:Node, ?axis) = C.CrossEntropyWithSoftmax(z.Var,labels.Var, new Axis(defaultArg axis 0)) |> F
+  static member sqrt (n:Node, ?name) = C.Sqrt(n.Var, defaultArg name "") |> F
+
+  static member cross_entropy_with_softmax(z:Node,labels:Node, ?axis, ?name) = 
+    match axis with 
+    | None -> C.CrossEntropyWithSoftmax(z.Var,labels.Var,defaultArg name "") |> F
+    | Some axis -> 
+        let axis = axis |> Some |> sanitize_axis
+        C.CrossEntropyWithSoftmax(z.Var,labels.Var, axis) |> F
+
 
   static member binary_cross_entropy (z:Node, labels:Node,?name) = C.BinaryCrossEntropy(z.Var,labels.Var, defaultArg name "") |> F
 

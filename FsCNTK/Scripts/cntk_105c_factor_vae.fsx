@@ -48,7 +48,7 @@ let ouput_dim = input_dim
 let num_label_classes = 10
 let n_z = 10
 let disc_dim = 1000
-let gamma = 60.0
+let gamma = 100.0
 
 //let init() = C.GlorotNormalInitializer()
 let init() = C.HeNormalInitializer()
@@ -60,12 +60,12 @@ let discriminator()  =
         let layers = seq {for i in 1 .. 5 -> L.Dense(D disc_dim, activation=Activation.LeakyReLU(Some 0.2), init=init())}
         let dense = (Seq.head layers, Seq.tail layers) ||> Seq.fold ( >> )
         dense>>L.Dense(D 2, init=init())
-    let prob = logits >> O.softmax
+    let prob = fun n -> O.softmax (logits n,axis=new Axis(0))
     (fun (x:Node) -> logits x), //return two functions for logit and prob 
     (fun (x:Node) -> prob x)
 
 let recognition (features:Node) =
-    let h_flat = L.Dense(D encoding_dim, activation=Activation.ELU, init=init()) features
+    let h_flat = (B.Stabilizer()>>L.Dense(D encoding_dim, activation=Activation.ELU, init=init())) features
     let w_mean = L.Dense(D n_z, name="w_mean", init=init()) h_flat
     let w_stddev_logits = L.Dense(D n_z, name="w_stddev", init=init()) h_flat
     w_mean, w_stddev_logits
@@ -109,7 +109,7 @@ let train_and_test (reader_train:MinibatchSource) (reader_test:MinibatchSource) 
     //# log(PT/PF) = logit_T - logit_F
     let vae_tc_loss = gamma .* O.reduce_mean( D_z_logits.[0 .. 1]  - D_z_logits.[1 .. 2]  , new Axis(0))
 
-    let recnstr_loss_vctr = x .* O.log(recnstr_x)  + (1.0 - x) .* O.log(1.0 - recnstr_x)
+    let recnstr_loss_vctr = (x .* O.log(recnstr_x))  + ((1.0 - x) .* O.log(1.0 - recnstr_x))
     let recnstr_loss = - O.reduce_sum(recnstr_loss_vctr, new Axis(0))
 
     let variance = O.exp(sigma_logits)
@@ -126,12 +126,13 @@ let train_and_test (reader_train:MinibatchSource) (reader_test:MinibatchSource) 
     let num_minibatches_to_train = (num_samples_per_sweep * num_sweeps_to_train_with) / minibatch_size
     
     let lr_schedule = T.schedule_per_sample (3e-4)
-    let lr_schedule2 = T.schedule_per_sample (3e-5)
+    let lr_schedule2 = T.schedule_per_sample (3e-4)
 
     let momentum_schedule = T.schedule(0.9126265014311797, minibatch_size)
 
     let opts = new AdditionalLearningOptions()
     opts.gradientClippingWithTruncation <- true  // mimic defaults used in python 
+    opts.gradientClippingThresholdPerSample <- 2.3
 
     let vae_learner = C.AdamLearner( 
                          O.parms recnstr_x |> parmVector,
