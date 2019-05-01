@@ -59,7 +59,7 @@ module Layers_Sequence =
             C.Alias(x.Var,name) 
       F out
         
-
+    /// input seq -> lagged/lead input seq 
     static member Delay(?initial_state:Node, ?time_step, ?name) =
       let time_step = defaultArg time_step 1
       let name = defaultArg name ""
@@ -380,6 +380,7 @@ module Layers_Sequence =
 
       rnn_step
 
+    /// start_state -> input seq -> (output | hidden_state*output) seq 
     static member RecurrenceFrom 
       (
        step_function : StepFunction,
@@ -423,6 +424,12 @@ module Layers_Sequence =
         //return step function output
         out
 
+    /// <summary>
+    /// input seq -> (output | hidden_state*output) seq
+    /// </summary>
+    /// <remarks>
+    /// <para>output depends on cell type used LSTM has 2 outputs, GRU has 1</para>
+    /// </remarks>
     static member Recurrence
       (
        step_function : StepFunction,
@@ -442,6 +449,7 @@ module Layers_Sequence =
         if !Layers.trace then printfn ">> Recurrence with %A" (initial_states |> List.map (O.shape>>dims))
         recurrence_from (O.combine initial_states) x
 
+    /// input seq -> output
     static member Fold
       (
        folder_function : StepFunction,
@@ -465,6 +473,7 @@ module Layers_Sequence =
         
         (recurrence >> (O.mapOutputs get_final)) x
 
+    /// start_state -> dynamic_axes_like -> (next_state | output*next_state) seq
     static member UnfoldFrom
       (
        generator_function   : Node->Node,

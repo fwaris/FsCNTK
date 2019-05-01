@@ -5,7 +5,7 @@ open System.IO
 open System
 open Blocks
 
-//************* model trains without error but needs more validation for correctness
+//************* model trains without error but needs more validation 
 
 //Reference: https://cntk.ai/pythondocs/CNTK_204_Sequence_To_Sequence.html
 

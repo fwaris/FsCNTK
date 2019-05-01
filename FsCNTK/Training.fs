@@ -25,6 +25,10 @@ type T =
     let schedule = schedule |> Seq.map (fun x->1,x) |> T.to_schedule
     new TrainingParameterScheduleDouble(schedule, uint32 epoch_size)
 
+  static member schedule_per_sample(schedule:seq<int*float>, epoch_size) = 
+    let schedule = schedule |> T.to_schedule
+    new TrainingParameterScheduleDouble(schedule, uint32 epoch_size)
+
   static member schedule_per_sample(schedule:float) = 
     new TrainingParameterScheduleDouble(schedule, uint32 1)
 
