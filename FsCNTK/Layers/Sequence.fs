@@ -81,7 +81,7 @@ module Layers_Sequence =
       =      
       let has_projection,cell_shape = 
         match cell_shape with 
-        | Shape.Unknown -> false,out_shape 
+        | s when s = Shape.Unknown -> false,out_shape 
         | c             -> true,c //what if the cell shape is same as output?
       
       let Wmr = 

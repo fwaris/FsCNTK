@@ -17,7 +17,7 @@ Layers.trace := true
     https://github.com/hwalsuklee/tensorflow-mnist-VAE/blob/master/mnist_data.py
 *)
 
-let isFast = true
+let isFast = false
 
 let featureStreamName = "features" //need stream names later
 let labelsStreamName = "labels"

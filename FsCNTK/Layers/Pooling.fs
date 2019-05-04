@@ -42,7 +42,7 @@ module Layers_Pooling =
         ) 
         =
         let name = defaultArg name ""
-        L.Pooling(op, !++ CNTK.NDShape.Unknown(),pad=false,name=name) 
+        L.Pooling(op, Shape.Unknown, pad=false, name=name) 
 
     static member Unpooling
         (

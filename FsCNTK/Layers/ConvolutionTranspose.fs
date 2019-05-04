@@ -70,7 +70,7 @@ module Layers_ConvolutionTranspose =
 
           let output_full_shape = 
               match output_shape with
-              | None | Some Shape.Unknown -> out_channels
+              | None             -> out_channels
               | Some (osp:Shape) -> out_channels + osp
 
           let init_kernel = B._initializer_with_rank (init, filter_rank = filter_rank, output_rank = -1)

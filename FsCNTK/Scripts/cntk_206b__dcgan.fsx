@@ -59,21 +59,21 @@ let convolutional_generator =
   >> bn_with_relu()
   >> L.Dense(Ds [gf_dim *2; s_h4; s_w4],init=defaultInit(), name="G h1")
   >> bn_with_relu()
-  >> L.ConvolutionTranspose2D
+  >> L.ConvolutionTranspose
       (
-        D gkernel,
+        Ds [gkernel; gkernel],
         num_filters=gf_dim*2,
-        strides=D gstride,
+        strides=D dstride,
         pad=true,
         output_shape=Ds[s_h2; s_w2],
         name="G h2"
       )
   >> bn_with_relu()
-  >> L.ConvolutionTranspose2D
+  >> L.ConvolutionTranspose
     (
-      D gkernel,
+      Ds [gkernel; gkernel],
       num_filters=1,
-      strides=D gstride,
+      strides=D dstride,
       pad=true,
       output_shape=Ds[img_h; img_w],
       activation=Activation.Sigmoid,
@@ -89,16 +89,16 @@ let convolutional_discriminator  =
   let df_dim = 64
 
   O.reshapeF (Ds [1; img_h; img_w])
-  >> L.Convolution2D(D dkernel, num_filters=1, strides=D dstride, name="D h0")
+  >> L.Convolution(Ds [dkernel;dkernel], num_filters=1, strides=D dstride, name="D h0")
   >> bn_with_leaky_relu 0.2
-  >> L.Convolution2D(D dkernel, num_filters=df_dim,strides=D dstride, name="D h1")
+  >> L.Convolution(Ds [dkernel;dkernel], num_filters=df_dim,strides=D dstride, name="D h1")
   >> bn_with_leaky_relu 0.2
   >> L.Dense (D dfc_dim, name = "D h2")
   >> bn_with_leaky_relu 0.2
   >> L.Dense(D 1, activation=Activation.Sigmoid, name="D=h3")
 
 let minibatch_size = 128u
-let num_minibatches = if isFast then 2 else 20000
+let num_minibatches = if isFast then 2000 else 20000
 let lr = 0.0002
 let momentum = 0.5 //equivalent to beta1
 let cntk_samples_folder = @"c:\s\Repos\cntk\Examples\Image\DataSets\MNIST" //from CNTK download
@@ -261,6 +261,6 @@ let grays =
     |> Seq.map (ImageUtils.toGray (28,28))
     |> Seq.toArray
 
-ImageUtils.showGrid (6,6) grays
+ImageUtils.showGrid "images" (6,6) grays
 (*
 *)

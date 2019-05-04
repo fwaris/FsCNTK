@@ -55,7 +55,7 @@ let train_and_test (reader_train:MinibatchSource) (reader_test:MinibatchSource) 
     let model:Node = model_func input
 
     let target = label ./ 255.
-    let loss = - (target .* O.log(model)) + ((1.0 - target) .* O.log(1.0 - model))
+    let loss = - ((target .* O.log(model)) + ((1.0 - target) .* O.log(1.0 - model))) //**** .* operator has lower priority so bracket appropriately
     let label_error = O.classification_error(model,target)
     loss.Func.Save(@"C:\s\repodata\fscntk\cntk_105\fs_loss.bin")
 
@@ -90,7 +90,11 @@ let train_and_test (reader_train:MinibatchSource) (reader_test:MinibatchSource) 
 
     let featureStreamInfo = reader_train.StreamInfo(featureStreamName) 
     let labelStreamInfo = reader_train.StreamInfo(labelsStreamName)  
-     
+
+    let parms = O.parms model 
+    let totalParms = parms |> Seq.map (fun p -> p.Shape.TotalSize) |> Seq.sum
+    printfn "Training %d parameters in %d parameter tensors" totalParms (Seq.length parms)
+    
     let mutable aggregate_metric = 0.
     for i in 1 .. num_minibatches_to_train do
         let data = reader_train.GetNextMinibatch(uint32 minibatch_size)

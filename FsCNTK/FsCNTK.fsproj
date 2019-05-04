@@ -74,11 +74,7 @@
     <Compile Include="Layers\LayerNormalization.fs" />
     <Compile Include="Layers\BatchNormalization.fs" />
     <Compile Include="Layers\Convolution.fs" />
-    <Compile Include="Layers\Convolution1D.fs" />
-    <Compile Include="Layers\Convolution2D.fs" />
     <Compile Include="Layers\ConvolutionTranspose.fs" />
-    <Compile Include="Layers\ConvolutionTranspose1D.fs" />
-    <Compile Include="Layers\ConvolutionTranspose2D.fs" />
     <Compile Include="Layers\Pooling.fs" />
     <Compile Include="Layers\Sequence.fs" />
     <Compile Include="Layers\Attention.fs" />
