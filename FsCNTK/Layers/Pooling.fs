@@ -26,14 +26,13 @@ module Layers_Pooling =
         ) 
         =
         let strides = defaultArg strides (D 1)
-        let pad = defaultArg pad false
         let name = defaultArg name ""
 
         let strides = L.pad_to_shape(filter_shape, strides, "strides")
-        let pad = asList (len filter_shape) pad 
+        let pad = match pad with None -> asList (len filter_shape) false | Some p -> p
         
         fun (x:Node) ->
-            C.Pooling(x.Var, op, !-- filter_shape, !-- strides, boolVector pad) |> F
+            C.Pooling(x.Var, op, !-- filter_shape, !-- strides, pad |> List.rev |> boolVector) |> F
 
     static member GlobalPooling
         (
@@ -42,7 +41,7 @@ module Layers_Pooling =
         ) 
         =
         let name = defaultArg name ""
-        L.Pooling(op, Shape.Unknown, pad=false, name=name) 
+        L.Pooling(op, Shape.Unknown, name=name) 
 
     static member Unpooling
         (
@@ -54,13 +53,12 @@ module Layers_Pooling =
         ) 
         =
         let strides = defaultArg strides (D 1)
-        let pad = defaultArg pad false
         let name = defaultArg name ""
 
         let strides = L.pad_to_shape(filter_shape, strides, "strides")
-        let pad = asList (len filter_shape) pad 
+        let pad = match pad with None -> asList (len filter_shape) false | Some p -> p
         
         fun (x:Node, y:Node) ->
-            C.Unpooling(x.Var, y.Var, op, !-- filter_shape, !-- strides, boolVector pad) |> F
+            C.Unpooling(x.Var, y.Var, op, !-- filter_shape, !-- strides, pad |> List.rev |> boolVector) |> F
 
             

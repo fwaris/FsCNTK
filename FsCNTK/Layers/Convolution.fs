@@ -31,7 +31,6 @@ module Layers_Convolution =
         let num_filters = defaultArg num_filters 0
         let activation = defaultArg activation Activation.NONE
         let init = defaultArg init (C.GlorotUniformInitializer())
-        let pad = defaultArg pad false
         let strides = defaultArg strides (D 1)
         let sharing = defaultArg sharing true
         let bias = defaultArg bias true
@@ -52,10 +51,9 @@ module Layers_Convolution =
         let out_channels = if num_filters = 0 then Ds[] else D num_filters
         let strd         = strides .padTo filter_shape
         let sharing      = asList (len filter_shape) sharing
-        let pad          = asList (len filter_shape) pad 
         let dialation    = dialation .padTo filter_shape 
 
-        let autoPadding = asList reduction_rank false @ pad 
+        let autoPadding = match pad with None-> asList ((len filter_shape) + reduction_rank) false | Some p -> p
         let filter_rank = len filter_shape
 
         fun (x:Node) ->

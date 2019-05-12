@@ -6,7 +6,7 @@ open System.IO
 //Train a generative model using adversarial training to generate handwritten digits
 //See this tutorial for background documentation: 
 // https://cntk.ai/pythondocs/CNTK_206B_DCGAN.html
-
+device <- DeviceDescriptor.GPUDevice(1)
 type C = CNTKLib
 Layers.trace := true
 let isFast = false
@@ -64,7 +64,7 @@ let convolutional_generator =
         Ds [gkernel; gkernel],
         num_filters=gf_dim*2,
         strides=D dstride,
-        pad=true,
+        pad=[false;true;true],  //depth * width * height
         output_shape=Ds[s_h2; s_w2],
         name="G h2"
       )
@@ -74,7 +74,7 @@ let convolutional_generator =
       Ds [gkernel; gkernel],
       num_filters=1,
       strides=D dstride,
-      pad=true,
+      pad=[false; true; true],
       output_shape=Ds[img_h; img_w],
       activation=Activation.Sigmoid,
       name="G h3"
@@ -101,8 +101,9 @@ let minibatch_size = 128u
 let num_minibatches = if isFast then 2000 else 20000
 let lr = 0.0002
 let momentum = 0.5 //equivalent to beta1
-let cntk_samples_folder = @"c:\s\Repos\cntk\Examples\Image\DataSets\MNIST" //from CNTK download
+//let cntk_samples_folder = @"c:\s\Repos\cntk\Examples\Image\DataSets\MNIST" //from CNTK download
 //let cntk_samples_folder = @"F:\s\cntk\Examples\Image\DataSets\MNIST" //from CNTK download
+let cntk_samples_folder = @"F:\fwaris\source\Repos\cntk\Examples\Image\DataSets\MNIST"
 
 let build_graph noise_shape image_shape generator discriminiator =
   let input_dynamic_axes = [Axis.DefaultBatchAxis()]
