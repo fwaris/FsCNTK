@@ -70,6 +70,13 @@ type O =
   static member combine (nodes:Node seq) = C.Combine(nodes |> Seq.map (fun n->n.Var) |> varVector) |> F
  
   static member uncombine (n:Node) = n.Func.Outputs |> Seq.map V |> Seq.toList
+
+  static member OptimizedRNNStack(n:Node, w:Node, hiddenDim, ?layers, ?bidirectional, ?recurrentOp, ?name ) = 
+    let layers = defaultArg layers 1
+    let bidirectional = defaultArg bidirectional false
+    let recurrentOp = defaultArg recurrentOp "lstm"
+    let name = defaultArg name ""
+    C.OptimizedRNNStack(n.Var, w.Var, uint32 hiddenDim,uint32 layers, bidirectional, recurrentOp, name) |> F
   
   static member mapOutputsZip (ys:(Node->Node) seq) =
     O.uncombine 
