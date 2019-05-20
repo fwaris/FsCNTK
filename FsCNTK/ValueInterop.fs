@@ -29,6 +29,7 @@ type Vl =
     Value.CreateSequence(!-- shape, v |> Seq.collect (Seq.collect (Seq.map float32)), device)
      
   static member getArray (v:Value) = 
+    let v = v.DeepClone(false)
     v.GetDenseData<float32>(new Constant(v.Data) :> Variable) |> Seq.map Seq.toArray |> Seq.toArray |> Array.head
 
 
