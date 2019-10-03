@@ -4,6 +4,8 @@ open System.Drawing
 open System.Runtime.InteropServices
 open System.Drawing.Imaging
 open System
+open System.Threading.Tasks
+open System.Drawing.Drawing2D
 
 let private scaler (sMin,sMax) (vMin,vMax) (v:float) =
     if v < vMin then failwith "out of min range for scaling"
@@ -27,12 +29,12 @@ let toGray (w,h) (vals:byte[]) =
     bmp.UnlockBits(data)
     bmp
     
-let show (bmp:Bitmap) = 
+let show t (bmp:Bitmap) = 
     let form = new Form()
     form.Width  <- 400
     form.Height <- 400
     form.Visible <- true 
-    form.Text <- "Image"
+    form.Text <- t
     let p = new PictureBox(
                     Image=bmp,
                     Dock = DockStyle.Fill,
@@ -66,3 +68,57 @@ let showGrid title (w,h) imgList =
         grid.Controls.Add p)
     form.Controls.Add(grid)
     form.Show()
+
+let resize (image:Image) width height =
+    let destRect = new Rectangle(0, 0, width, height);
+    let destImage = new Bitmap(width, height);
+    destImage.SetResolution(image.HorizontalResolution, image.VerticalResolution);
+    use graphics = Graphics.FromImage(destImage)
+    graphics.CompositingMode <- CompositingMode.SourceCopy;
+    graphics.CompositingQuality <- CompositingQuality.HighQuality;
+    graphics.InterpolationMode <- InterpolationMode.HighQualityBicubic;
+    graphics.SmoothingMode <- SmoothingMode.HighQuality;
+    graphics.PixelOffsetMode <- PixelOffsetMode.HighQuality;
+    use wrapMode = new ImageAttributes()
+    wrapMode.SetWrapMode(WrapMode.TileFlipXY);
+    graphics.DrawImage(image, destRect, 0, 0, image.Width,image.Height, GraphicsUnit.Pixel, wrapMode);
+    destImage
+
+
+let getPixelMapper(pixelFormat, heightStride) =
+    match pixelFormat with
+    | PixelFormat.Format32bppArgb -> (fun (h, w, c) -> h * heightStride + w * 4 + c) 
+    | PixelFormat.Format24bppRgb ->  (fun (h, w, c) -> h * heightStride + w * 3 + c)
+    | x -> failwithf "unsupported pixel format %A" x
+
+let parallelExtractCHW (image:Bitmap) =
+    let channelStride = image.Width * image.Height
+    let imageWidth = image.Width
+    let imageHeight = image.Height
+
+    let features:byte[] = Array.zeroCreate (imageWidth * imageHeight * 3)
+    let bitmapData = image.LockBits(new System.Drawing.Rectangle(0, 0, imageWidth, imageHeight), ImageLockMode.ReadOnly, image.PixelFormat)
+    let ptr = bitmapData.Scan0;
+    let bytes = Math.Abs(bitmapData.Stride) * bitmapData.Height;
+    let rgbValues:byte[] = Array.zeroCreate bytes
+
+    let stride = bitmapData.Stride;
+
+    // Copy the RGB values into the array.
+    System.Runtime.InteropServices.Marshal.Copy(ptr, rgbValues, 0, bytes)
+
+    // The mapping depends on the pixel format
+    // The mapPixel lambda will return the right color channel for the desired pixel
+    let mapPixel = getPixelMapper(image.PixelFormat, stride);
+
+    Parallel.For(0, imageHeight, (fun h ->
+        Parallel.For(0, imageWidth, (fun w ->
+            Parallel.For(0, 3, (fun c ->
+              features.[channelStride * c + imageWidth * h + w] <- rgbValues.[mapPixel(h, w, c)]
+            ))  |> ignore
+        )) |> ignore
+    )) |> ignore
+
+    image.UnlockBits(bitmapData)
+
+    features |> Array.map float32
