@@ -69,7 +69,7 @@ let showGrid title (w,h) imgList =
     form.Controls.Add(grid)
     form.Show()
 
-let resize (image:Image) width height =
+let resize width height (image:Image)  =
     let destRect = new Rectangle(0, 0, width, height);
     let destImage = new Bitmap(width, height);
     destImage.SetResolution(image.HorizontalResolution, image.VerticalResolution);

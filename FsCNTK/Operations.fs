@@ -10,6 +10,18 @@ type O =
     | F f -> !++ f.Output.Shape
     | P p -> !++ p.Shape
 
+  static member pad(n:Node,pattern:(int*int) list, ?mode, ?constant_value) = 
+    let mode = defaultArg mode PaddingMode.CONSTANTPAD
+    let cnst = defaultArg constant_value 1.0
+    let head = new SizeTVector()
+    let foot = new SizeTVector()
+
+    pattern 
+    |> List.rev 
+    |> List.iter (fun (h,t) -> head.Add(uint32 h); foot.Add(uint32 t))
+
+    C.Pad(n.Var,mode,head,foot,cnst) |> F
+
   static member unpack_batch (n:Node, ?name) = C.UnpackBatch(n.Var,defaultArg name "") |> F
 
   static member to_batch(n:Node, ?name) = C.ToBatch(n.Var, defaultArg name "") |> F
