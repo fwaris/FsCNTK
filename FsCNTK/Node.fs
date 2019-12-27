@@ -18,6 +18,15 @@ open System.Diagnostics
       member x.Func = match x with V v -> v.ToFunction() | F f -> f | P p -> p.ToFunction()
       member x.Shape = !++ x.Var.Shape
 
+      member x.Item(name) = 
+        Vl.parameterNames(x.Func)
+        |> Seq.filter(fun (u,n)->n=name)
+        |> Seq.map(fun (u,n)-> Vl.parmVal(x.Func,u))
+        |> Seq.filter (Option.isSome)
+        |> Seq.map (fun x->x.Value)
+        |> Seq.map(fun (s,xs)-> !++ s, xs)
+        |> Seq.toArray
+
       member x.DebugDisplay = 
         let axisStr = (if x.Var.HasBatchAxis() then "#" else "") + (if x.Var.HasSequenceAxis() then ", *" else "")
         sprintf "%s %A [%s]" x.Var.Name ((!++ x.Var.Shape) |> dims) axisStr

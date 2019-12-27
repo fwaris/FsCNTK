@@ -32,5 +32,22 @@ type Vl =
     let v = v.DeepClone(false)
     v.GetDenseData<float32>(new Constant(v.Data) :> Variable) |> Seq.map Seq.toArray |> Seq.toArray |> Array.head
 
+  static member getArray(data:NDArrayView) =
+    let v = new Value(data)
+    Vl.getArray(v)
+
+  static member parameterNames(f:CNTK.Function) =
+    f.Parameters()
+    |> Seq.map(fun x-> x.Uid, x.Name)
+    |> Seq.toArray
+ 
+  static member parmVal (f:CNTK.Function,uid:string) =
+    f.Parameters()
+    |> Seq.tryFind(fun x->x.Uid=uid)
+    |> Option.map(fun x->x.Shape, x.Value() |> Vl.getArray)
+        
+   
+                                       
+
 
     
