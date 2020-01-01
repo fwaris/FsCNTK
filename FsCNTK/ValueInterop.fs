@@ -22,6 +22,11 @@ type Vl =
     let shape = defaultArg shape (D d)
     Value.CreateSequence(!-- shape, v  |> Seq.collect (Seq.map float32), device)
 
+  static member toSeqBatches (v:#seq<#seq<float>>, ?shape)  =
+    let d = v |> Seq.head |>  Seq.length
+    let shape = defaultArg shape (D d)
+    Value.CreateBatchOfSequences(!-- shape, v  |> Seq.map (Seq.map float32), device)
+
   static member toSeqValue (v:#seq<#seq<#seq<float>>>, ?shape)  =
     let d1 = v |> Seq.head |>  Seq.length
     let d2 = v |> Seq.head |> Seq.head |> Seq.length
