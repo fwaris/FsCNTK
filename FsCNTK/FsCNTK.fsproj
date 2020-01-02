@@ -60,6 +60,7 @@
     <Compile Include="AssemblyInfo.fs" />
     <Compile Include="ImageUtils.fs" />
     <Compile Include="Probability.fs" />
+    <Compile Include="MathUtils.fs" />
     <Compile Include="FsBase.fs" />
     <Compile Include="Shape.fs" />
     <Compile Include="ValueInterop.fs" />
