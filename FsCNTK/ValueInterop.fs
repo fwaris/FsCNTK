@@ -22,16 +22,22 @@ type Vl =
     let shape = defaultArg shape (D d)
     Value.CreateSequence(!-- shape, v  |> Seq.collect (Seq.map float32), device)
 
-  static member toSeqBatches (v:#seq<#seq<float>>, ?shape)  =
-    let d = v |> Seq.head |>  Seq.length
-    let shape = defaultArg shape (D d)
-    Value.CreateBatchOfSequences(!-- shape, v  |> Seq.map (Seq.map float32), device)
-
   static member toSeqValue (v:#seq<#seq<#seq<float>>>, ?shape)  =
     let d1 = v |> Seq.head |>  Seq.length
     let d2 = v |> Seq.head |> Seq.head |> Seq.length
     let shape = defaultArg shape (Ds [d1;d2])
     Value.CreateSequence(!-- shape, v |> Seq.collect (Seq.collect (Seq.map float32)), device)
+
+  static member toSeqBatches (v:#seq<#seq<float>>, ?shape)  =
+    let d = v |> Seq.head |>  Seq.length
+    let shape = defaultArg shape (D d)
+    Value.CreateBatchOfSequences(!-- shape, v  |> Seq.map (Seq.map float32), device)
+
+  static member toSeqBatches (v:#seq<#seq<#seq<float>>>, ?shape)  =
+    let d = v |> Seq.head |> Seq.head |> Seq.length
+    let shape = defaultArg shape (D d)
+    let vs = v |> Seq.map (Seq.collect (Seq.map float32))
+    Value.CreateBatchOfSequences(!-- shape, vs, device)
      
   static member getArray (v:Value) = 
     let v = v.DeepClone(false)
