@@ -1,4 +1,4 @@
-﻿#load "SetEnv.fsx"
+﻿#load "FsCNTK_SetEnv.fsx"
 open FsCNTK
 open CNTK
 open System.IO

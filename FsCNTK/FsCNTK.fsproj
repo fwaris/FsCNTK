@@ -79,8 +79,8 @@
     <Compile Include="Layers\Pooling.fs" />
     <Compile Include="Layers\Sequence.fs" />
     <Compile Include="Layers\Attention.fs" />
-    <None Include="Scripts\SetEnv.fsx" />
-    <None Include="Scripts\SetEnvDebug.fsx" />
+    <None Include="Scripts\FsCNTK_SetEnv.fsx" />
+    <None Include="Scripts\FsCNTK_SetEnvDebug.fsx" />
     <None Include="Scripts\cntk_105_autoencoder.fsx" />
     <None Include="Scripts\cntk_105b_variational_autoencoder.fsx" />
     <None Include="Scripts\cntk_105c_factor_vae.fsx" />
