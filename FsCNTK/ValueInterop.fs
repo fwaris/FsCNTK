@@ -40,8 +40,10 @@ type Vl =
     Value.CreateBatchOfSequences(!-- shape, vs, device)
      
   static member getArray (v:Value) = 
-    let v = v.DeepClone(false)
-    v.GetDenseData<float32>(new Constant(v.Data) :> Variable) |> Seq.map Seq.toArray |> Seq.toArray |> Array.head
+    let v = v.DeepClone(true)
+    let xs = v.GetDenseData<float32>(new Constant(v.Data) :> Variable) |> Seq.map Seq.toArray |> Seq.toArray |> Array.head
+    v.Dispose()
+    xs
 
   static member getArray(data:NDArrayView) =
     let v = new Value(data)

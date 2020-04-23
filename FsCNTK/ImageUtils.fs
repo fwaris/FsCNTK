@@ -84,6 +84,9 @@ let resize width height (image:Image)  =
     graphics.DrawImage(image, destRect, 0, 0, image.Width,image.Height, GraphicsUnit.Pixel, wrapMode);
     destImage
 
+let crop (rect:Rectangle) (image:Image)  =
+    let cimage = new Bitmap(image)
+    cimage.Clone(rect,cimage.PixelFormat)
 
 let getPixelMapper(pixelFormat, heightStride) =
     match pixelFormat with

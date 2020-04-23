@@ -13,11 +13,20 @@ type E =
       n.Func.Evaluate(args,out,device)
       out
 
+  static member eval (inputValue:Value) = 
+    fun (n:Node) ->
+      let inp = idict [n.Func.Arguments.[0],inputValue]
+      let outVar = n.Func.Outputs.[0] //first is the desired output
+      let out = n.Func.Outputs |> Seq.map(fun o->o,(null:Value)) |> idict    
+      n.Func.Evaluate(inp,out,device)
+      out.[outVar]
+
   ///function takes only one argument 
-  static member eval(mb:MinibatchData) =
+  static member eval (mb:MinibatchData) =
     fun (n:Node) ->
       let argV = n.Func.Arguments.[0] //expect only 1 argument
       E.eval(idict[argV,mb.data]) n
+
   
   ///from streamed data
   static member eval(mbs:UnorderedMapStreamInformationMinibatchData) =
