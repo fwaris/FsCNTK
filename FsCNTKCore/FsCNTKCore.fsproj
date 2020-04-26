@@ -1,0 +1,47 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFrameworks>netstandard2.0;net5.0</TargetFrameworks>
+	  <LangVersion>preview</LangVersion>
+	  <Platforms>x64</Platforms>
+	  <AssemblyVersion>1.0.0.1</AssemblyVersion>
+	  <FileVersion>1.0.0.1</FileVersion>
+	  <Version>1.0.1</Version>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+    <PlatformTarget>x64</PlatformTarget>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Include="AssemblyInfo.fs" />
+    <Compile Include="..\FsCNTK\Probability.fs" Link="Probability.fs" />
+    <Compile Include="..\FsCNTK\MathUtils.fs" Link="MathUtils.fs" />
+    <Compile Include="..\FsCNTK\FsBase.fs" Link="FsBase.fs" />
+    <Compile Include="..\FsCNTK\Shape.fs" Link="Shape.fs" />
+    <Compile Include="..\FsCNTK\ValueInterop.fs" Link="ValueInterop.fs" />
+    <Compile Include="..\FsCNTK\Node.fs" Link="Node.fs" />
+    <Compile Include="..\FsCNTK\Operations.fs" Link="Operations.fs" />
+    <Compile Include="..\FsCNTK\Evaluation.fs" Link="Evaluation.fs" />
+    <Compile Include="..\FsCNTK\Training.fs" Link="Training.fs" />
+    <Compile Include="..\FsCNTK\Blocks.fs" Link="Blocks.fs" />
+    <Folder Include="Layers\" />
+    <Compile Include="..\FsCNTK\Layers\LayersBase.fs" Link="Layers\LayersBase.fs" />
+    <Compile Include="..\FsCNTK\Layers\Dense.fs" Link="Layers\Dense.fs" />
+    <Compile Include="..\FsCNTK\Layers\Dropout.fs" Link="Layers\Dropout.fs" />
+    <Compile Include="..\FsCNTK\Layers\LayerNormalization.fs" Link="Layers\LayerNormalization.fs" />
+    <Compile Include="..\FsCNTK\Layers\BatchNormalization.fs" Link="Layers\BatchNormalization.fs" />
+    <Compile Include="..\FsCNTK\Layers\Convolution.fs" Link="Layers\Convolution.fs" />
+    <Compile Include="..\FsCNTK\Layers\ConvolutionTranspose.fs" Link="Layers\ConvolutionTranspose.fs" />
+    <Compile Include="..\FsCNTK\Layers\Pooling.fs" Link="Layers\Pooling.fs" />
+    <Compile Include="..\FsCNTK\Layers\Sequence.fs" Link="Layers\Sequence.fs" />
+    <Compile Include="..\FsCNTK\Layers\Attention.fs" Link="Layers\Attention.fs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="CNTK.GPU" Version="2.7.0" />
+  </ItemGroup>
+
+  <ItemGroup />
+
+</Project>
