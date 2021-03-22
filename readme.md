@@ -2,7 +2,7 @@
 
 A F# functional wrapper over CNTK's .Net API
 
-[This is still experimental. Use it at your risk]
+[very rough, incomplete and probably not fully correct at this stage]
 
 ## Model Examples
 
