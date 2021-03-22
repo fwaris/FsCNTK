@@ -6,7 +6,16 @@ module FsiAutoShow =
 
 #r "netstandard" // without .dll seems to be the correct way
 #r "nuget: FSharp.Charting"
-#r "nuget: CNTK.GPU"
+#r "nuget: CNTK.GPU, Version=2.7.0"
+
+let userProfile = System.Environment.GetEnvironmentVariable("UserProfile")
+let packageRoot = $@"{userProfile}\.nuget\packages"
+let nativeLib =  $@"{packageRoot}\cntk.gpu\2.7.0\support\x64\Release"
+let path = System.Environment.GetEnvironmentVariable("path")
+let path' =
+    path
+    + ";" + nativeLib
+System.Environment.SetEnvironmentVariable("path",path')
 
 #I @"..\..\FsCNTK.GPU"
 #load "Probability.fs"
