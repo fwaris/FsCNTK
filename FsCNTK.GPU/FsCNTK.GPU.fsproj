@@ -1,0 +1,52 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>netstandard2.1</TargetFramework>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|AnyCPU'">
+    <PlatformTarget>x64</PlatformTarget>
+  </PropertyGroup>
+
+	<PropertyGroup>
+		<Title>FsCNTK.GPU</Title>
+		<Version>0.9.0</Version>
+		<authors>Faisal Waris</authors>
+		<Copyright>Copyright © 2021</Copyright>
+		<Description>Functional wrapper over CNTK written in F#</Description>
+	    <licenseUrl>https://licenses.nuget.org/MIT</licenseUrl>
+        <projectUrl>https://github.com/fwaris/FsCNTK</projectUrl>
+        <PackageLicenseExpression>MIT</PackageLicenseExpression>
+        <PackageProjectUrl>https://github.com/fwaris/FsCNTK</PackageProjectUrl>
+	</PropertyGroup>
+
+  <ItemGroup>
+    <Compile Include="AssemblyInfo.fs" />
+    <Compile Include="Probability.fs" />
+    <Compile Include="MathUtils.fs" />
+    <Compile Include="FsBase.fs" />
+    <Compile Include="Shape.fs" />
+    <Compile Include="ValueInterop.fs" />
+    <Compile Include="Node.fs" />
+    <Compile Include="Operations.fs" />
+    <Compile Include="Evaluation.fs" />
+    <Compile Include="Training.fs" />
+    <Compile Include="Library.fs" />
+    <Compile Include="Blocks.fs" />
+    <Compile Include="Layers\LayersBase.fs" />
+    <Compile Include="Layers\Dense.fs" />
+    <Compile Include="Layers\Dropout.fs" />
+    <Compile Include="Layers\LayerNormalization.fs" />
+    <Compile Include="Layers\BatchNormalization.fs" />
+    <Compile Include="Layers\Convolution.fs" />
+    <Compile Include="Layers\ConvolutionTranspose.fs" />
+    <Compile Include="Layers\Pooling.fs" />
+    <Compile Include="Layers\Sequence.fs" />
+    <Compile Include="Layers\Attention.fs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="CNTK.GPU" Version="2.7.0" />
+  </ItemGroup>
+
+</Project>

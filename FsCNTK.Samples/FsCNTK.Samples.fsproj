@@ -1,0 +1,34 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net5.0-windows</TargetFramework>
+	  <PlatformTarget>x64</PlatformTarget>
+	  <UseWindowsForms>true</UseWindowsForms>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <EmbeddedResource Remove="Scripts\imgs\**" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Include="ImageUtils.fs" />
+    <None Include="Scripts\cntk_105b_variational_autoencoder.fsx" />
+    <None Include="Scripts\cntk_105c_factor_vae.fsx" />
+    <None Include="Scripts\cntk_105_autoencoder.fsx" />
+    <None Include="Scripts\cntk_106a_lstm_with_sim_data.fsx" />
+    <None Include="Scripts\cntk_202_lang_understanding.fsx" />
+    <None Include="Scripts\cntk_204_s2s_attention.fsx" />
+    <None Include="Scripts\cntk_206b__dcgan.fsx" />
+    <None Include="Scripts\cntk_599a_sequence_to_sequence.fsx" />
+    <None Include="Scripts\FsCNTK_SetEnv.fsx" />
+	<None Include="Scripts\imgs\Discriminator_Loss.Png" />
+	<None Include="Scripts\imgs\Generator_loss.Png" />
+	<None Include="Scripts\imgs\LSTM_Lang_Model.Png" />
+	  
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\FsCNTK.GPU\FsCNTK.GPU.fsproj" />
+  </ItemGroup>
+
+</Project>

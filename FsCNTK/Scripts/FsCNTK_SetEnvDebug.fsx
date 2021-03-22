@@ -53,7 +53,7 @@ dependencies
 //for debugging from source
 //debug output folder should be on path
 #I @"c:\s\Repos\cntk\x64\Debug"
-#r @"Cntk.Core.Managed-2.6d.dll"
+#r @"Cntk.Core.Managed-2.7d.dll"
 
 //for release source build
 //release output folder should be on path
